@@ -3,6 +3,7 @@ package com.itangcent.idea.plugin.api.export.postman
 import com.google.gson.JsonObject
 import com.google.gson.internal.LazilyParsedNumber
 import com.google.inject.Inject
+import com.itangcent.common.logger.Log
 import com.itangcent.common.logger.traceError
 import com.itangcent.common.utils.KV
 import com.itangcent.common.utils.asInt
@@ -72,6 +73,14 @@ open class DefaultPostmanApiHelper : PostmanApiHelper {
             logger.error("Authentication failed!")
             return
         }
+
+        if (returnValue.contains("WLError")
+            || returnValue.contains("attribute is invalid")
+        ) {
+            logger.error("Please try after turning off [build example] at Preferences(Settings) > Other Settings > EasyApi > Postman > build example")
+            return
+        }
+
         val returnObj = returnValue.asJsonElement()
         val errorName = returnObj
             .sub("error")
@@ -423,7 +432,7 @@ open class DefaultPostmanApiHelper : PostmanApiHelper {
         }
     }
 
-    companion object {
+    companion object : Log() {
         const val POSTMAN_HOST = "https://api.getpostman.com"
 
         //const val IMPOREDAPI = "$POSTMANHOST/import/exported"
@@ -441,5 +450,3 @@ open class DefaultPostmanApiHelper : PostmanApiHelper {
     }
 
 }
-
-private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(DefaultPostmanApiHelper::class.java)

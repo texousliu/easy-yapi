@@ -9,6 +9,7 @@ import com.itangcent.intellij.context.ActionContext
 import com.itangcent.intellij.logger.Logger
 import com.itangcent.intellij.util.FileUtils
 import com.itangcent.intellij.util.ToolUtils
+import com.itangcent.utils.localPath
 import java.awt.HeadlessException
 import java.io.File
 import java.nio.charset.Charset
@@ -74,7 +75,7 @@ class DefaultFileSaveHelper : FileSaveHelper {
                         var filePath = "${file.path}${File.separator}$defaultFile"
                         filePath = availablePath(filePath)
                         FileUtils.forceSave(filePath, content.toByteArray(charset))
-                        onSaveSuccess(filePath)
+                        onSaveSuccess(filePath.localPath())
                     } catch (e: Exception) {
                         onSaveFailed(e.message)
                         actionContext.runAsync {
@@ -84,7 +85,7 @@ class DefaultFileSaveHelper : FileSaveHelper {
                 } else {
                     try {
                         FileUtils.forceSave(file, content.toByteArray(charset))
-                        onSaveSuccess(file.path)
+                        onSaveSuccess(file.path.localPath())
                     } catch (e: Exception) {
                         onSaveFailed(e.message)
                         actionContext.runAsync {
@@ -143,7 +144,7 @@ class DefaultFileSaveHelper : FileSaveHelper {
                 var index = 1
                 var pathWithIndex: String?
                 while (true) {
-                    pathWithIndex = "$path-$index"
+                    pathWithIndex = pathWithIndex(path, index)
                     if (!FileUtil.exists(pathWithIndex)) {
                         break
                     }
@@ -151,9 +152,22 @@ class DefaultFileSaveHelper : FileSaveHelper {
                 }
                 pathWithIndex?.let { return it }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
         return path
+    }
+
+    /**
+     * xxx -> xxx-$index
+     * xxx.txt -> xxx-$index.txt
+     */
+    private fun pathWithIndex(path: String, index: Int): String {
+        val dot = path.indexOf('.')
+        return if (dot == -1) {
+            "$path-$index"
+        } else {
+            path.substring(0, dot) + "-$index" + path.substring(dot)
+        }
     }
 
     private fun copyAndLog(info: String, onCopy: () -> Unit) {

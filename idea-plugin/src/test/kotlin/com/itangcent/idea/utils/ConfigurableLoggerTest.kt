@@ -11,7 +11,6 @@ import com.itangcent.intellij.extend.guice.with
 import com.itangcent.intellij.logger.Logger
 import com.itangcent.mock.BaseContextTest
 import com.itangcent.mock.SettingBinderAdaptor
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import kotlin.test.assertEquals

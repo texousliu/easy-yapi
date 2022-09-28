@@ -27,8 +27,9 @@ import com.itangcent.intellij.jvm.element.ExplicitMethod
 import com.itangcent.intellij.jvm.element.ExplicitParameter
 import com.itangcent.intellij.logger.Logger
 import com.itangcent.intellij.psi.ClassRuleConfig
-import com.itangcent.intellij.psi.JsonOption
+import com.itangcent.intellij.jvm.JsonOption
 import com.itangcent.intellij.psi.PsiClassUtils
+import java.util.LinkedList
 import javax.script.ScriptContext
 import javax.script.ScriptEngine
 import javax.script.SimpleScriptContext
@@ -55,6 +56,9 @@ abstract class ScriptRuleParser : RuleParser {
 
     @Inject
     protected val methodReturnInferHelper: MethodInferHelper? = null
+
+    @Inject
+    protected lateinit var actionContext: ActionContext
 
     @Inject
     protected val logger: Logger? = null
@@ -176,6 +180,45 @@ abstract class ScriptRuleParser : RuleParser {
             return null
         }
 
+        @Suppress("UNCHECKED_CAST")
+        private fun <T> wrapAs(obj: Any?): T? {
+            return wrap(obj) as T?
+        }
+
+        private fun wrap(obj: Any?): Any? {
+            if (obj == null) {
+                return null
+            }
+
+            if (obj is RuleContext) {
+                return obj
+            }
+
+            val className = obj::class.qualifiedName ?: return obj
+            if (className.startsWith("com.intellij")
+                || className.startsWith("com.itangcent")
+            ) {
+                return contextOf(obj, getPsiContext())
+            }
+
+            if (obj is Map<*, *>) {
+                val copy = LinkedHashMap<Any?, Any?>()
+                for ((k, v) in obj.entries) {
+                    copy[k] = wrap(v)
+                }
+                return copy
+            }
+
+            if (obj is Collection<*>) {
+                val copy = LinkedList<Any?>()
+                for (ele in obj) {
+                    copy.add(wrap(ele))
+                }
+                return copy
+            }
+            return obj
+        }
+
         fun name(): String {
             return getName() ?: ""
         }
@@ -198,14 +241,14 @@ abstract class ScriptRuleParser : RuleParser {
          * it.annMap("annotation_name"):Map<String, Any?>?
          */
         fun annMap(name: String): Map<String, Any?>? {
-            return annotationHelper!!.findAnnMap(getResource(), name)
+            return wrapAs(annotationHelper!!.findAnnMap(getResource(), name))
         }
 
         /**
          * it.annMaps("annotation_name"):List<Map<String, Any?>>?
          */
         fun annMaps(name: String): List<Map<String, Any?>>? {
-            return annotationHelper!!.findAnnMaps(getResource(), name)
+            return wrapAs(annotationHelper!!.findAnnMaps(getResource(), name))
         }
 
         /**
@@ -226,7 +269,7 @@ abstract class ScriptRuleParser : RuleParser {
          * it.ann("annotation_name","attr"):Any?
          */
         fun annValue(name: String, attr: String): Any? {
-            return annotationHelper!!.findAttr(getResource(), name, attr)
+            return wrapAs(annotationHelper!!.findAttr(getResource(), name, attr))
         }
 
         /**
@@ -326,7 +369,9 @@ abstract class ScriptRuleParser : RuleParser {
         }
 
         override fun isExtend(superClass: String): Boolean {
-            return jvmClassHelper!!.isInheritor(psiClass, superClass)
+            return ActionContext.getContext()!!.callInReadUI {
+                jvmClassHelper!!.isInheritor(psiClass, superClass)
+            } ?: false
         }
 
         override fun isMap(): Boolean {
@@ -338,7 +383,7 @@ abstract class ScriptRuleParser : RuleParser {
         }
 
         override fun isArray(): Boolean {
-            return psiClass.qualifiedName?.endsWith("[]") ?: false
+            return name().endsWith("[]")
         }
 
         /**
@@ -363,6 +408,18 @@ abstract class ScriptRuleParser : RuleParser {
             return jvmClassHelper!!.isNormalType(name())
         }
 
+        override fun isInterface(): Boolean {
+            return psiClass.isInterface
+        }
+
+        override fun isAnnotationType(): Boolean {
+            return psiClass.isAnnotationType
+        }
+
+        override fun isEnum(): Boolean {
+            return psiClass.isEnum
+        }
+
         @ScriptIgnore
         override fun asPsiModifierListOwner(): PsiModifierListOwner? {
             return psiClass
@@ -376,6 +433,10 @@ abstract class ScriptRuleParser : RuleParser {
             return psiClass.name
         }
 
+        override fun toJson(): String? {
+            return toJson(false, false)
+        }
+
         override fun toJson(readGetter: Boolean, readSetter: Boolean): String? {
             return (jvmClassHelper!!.resolveClassToType(psiClass)?.let {
                 psiClassHelper!!.getTypeObject(
@@ -385,6 +446,10 @@ abstract class ScriptRuleParser : RuleParser {
             } ?: psiClassHelper!!.getFields(psiClass)).let { RequestUtils.parseRawBody(it) }
         }
 
+        override fun toJson5(): String? {
+            return toJson5(false, false)
+        }
+
         override fun toJson5(readGetter: Boolean, readSetter: Boolean): String? {
             return (jvmClassHelper!!.resolveClassToType(psiClass)?.let {
                 psiClassHelper!!.getTypeObject(
@@ -392,12 +457,56 @@ abstract class ScriptRuleParser : RuleParser {
                     JsonOption.READ_COMMENT.or(readGetter, readSetter)
                 )
             } ?: psiClassHelper!!.getFields(psiClass)).let {
-                ActionContext.getContext()!!.instance(Json5Formatter::class).format(it)
+                actionContext.instance(Json5Formatter::class).format(it)
+            }
+        }
+
+        override fun superClass(): ScriptClassContext? {
+            if (psiClass.isInterface || psiClass.isAnnotationType
+                || psiClass.isEnum
+            ) {
+                return null
+            }
+            extends()?.takeIf { it.isNotEmpty() }?.get(0)?.let {
+                return it
+            }
+            return psiClass.superClass?.let { ScriptPsiClassContext(it) }
+        }
+
+        /**
+         * Returns the list of classes that this class or interface extends.
+         *
+         * @return the extends list, or null for anonymous classes.
+         */
+        override fun extends(): Array<ScriptClassContext>? {
+            return psiClass.extendsList?.referencedTypes?.mapToTypedArray {
+                ScriptPsiTypeContext(it)
+            }
+        }
+
+        /**
+         * Returns the list of interfaces that this class implements.
+         *
+         * @return the implements list, or null for anonymous classes
+         */
+        override fun implements(): Array<ScriptClassContext>? {
+            return psiClass.implementsList?.referencedTypes?.mapToTypedArray {
+                ScriptPsiTypeContext(it)
             }
         }
 
         override fun toString(): String {
             return name()
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is ScriptClassContext) return false
+            return toString() == other.toString()
+        }
+
+        override fun hashCode(): Int {
+            return toString().hashCode()
         }
     }
 
@@ -417,6 +526,10 @@ abstract class ScriptRuleParser : RuleParser {
             return fields.mapToTypedArray { ScriptExplicitFieldContext(it) }
         }
 
+        override fun toJson(): String? {
+            return toJson(false, false)
+        }
+
         override fun toJson(readGetter: Boolean, readSetter: Boolean): String? {
             return psiClassHelper!!.getTypeObject(
                 explicitClass.asDuckType(), psiClass,
@@ -424,18 +537,54 @@ abstract class ScriptRuleParser : RuleParser {
             )?.let { RequestUtils.parseRawBody(it) }
         }
 
+        override fun toJson5(): String? {
+            return toJson5(false, false)
+        }
+
         override fun toJson5(readGetter: Boolean, readSetter: Boolean): String? {
             return psiClassHelper!!.getTypeObject(
                 explicitClass.asDuckType(), psiClass,
                 JsonOption.READ_COMMENT.or(readGetter, readSetter)
             )?.let {
-                ActionContext.getContext()!!.instance(Json5Formatter::class).format(it)
+                actionContext.instance(Json5Formatter::class).format(it)
+            }
+        }
+
+        /**
+         * Returns the list of classes that this class or interface extends.
+         *
+         * @return the extends list, or null for anonymous classes.
+         */
+        override fun extends(): Array<ScriptClassContext>? {
+            return explicitClass.extends()?.mapToTypedArray {
+                ScriptExplicitClassContext(it)
+            }
+        }
+
+        /**
+         * Returns the list of interfaces that this class implements.
+         *
+         * @return the implements list, or null for anonymous classes
+         */
+        override fun implements(): Array<ScriptClassContext>? {
+            return explicitClass.implements()?.mapToTypedArray {
+                ScriptExplicitClassContext(it)
             }
         }
 
         @ScriptIgnore
         override fun getCore(): Any {
             return explicitClass
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is ScriptClassContext) return false
+            return toString() == other.toString()
+        }
+
+        override fun hashCode(): Int {
+            return toString().hashCode()
         }
     }
 
@@ -540,7 +689,7 @@ abstract class ScriptRuleParser : RuleParser {
          * @return the method return type, or null if the method is a constructor.
          */
         open fun returnType(): ScriptClassContext? {
-            return (psiElement as PsiMethod).returnType?.let { ScriptPsiTypeContext(it) }
+            return (psiElement as PsiMethod).getResolvedReturnType()?.let { ScriptPsiTypeContext(it) }
         }
 
         /**
@@ -615,9 +764,9 @@ abstract class ScriptRuleParser : RuleParser {
 
         open fun returnJson(
             needInfer: Boolean = false, readGetter: Boolean = true,
-            readSetter: Boolean = true
+            readSetter: Boolean = true,
         ): String? {
-            val psiType = psiMethod.returnType ?: return null
+            val psiType = psiMethod.getResolvedReturnType() ?: return null
             return when {
                 needInfer && (!duckTypeHelper!!.isQualified(psiType, psiMethod) ||
                         PsiClassUtils.isInterface(psiType)) -> {
@@ -646,7 +795,7 @@ abstract class ScriptRuleParser : RuleParser {
 
         override fun returnJson(
             needInfer: Boolean, readGetter: Boolean,
-            readSetter: Boolean
+            readSetter: Boolean,
         ): String? {
             val duckType = explicitMethod.getReturnType() ?: return null
             return when {
@@ -713,7 +862,7 @@ abstract class ScriptRuleParser : RuleParser {
         }
 
         override fun getName(): String? {
-            return psiParameter.name
+            return actionContext.callInReadUI { psiParameter.name }
         }
 
         @ScriptIgnore
@@ -792,13 +941,70 @@ abstract class ScriptRuleParser : RuleParser {
          */
         fun isNormalType(): Boolean
 
+        /**
+         * Checks if the class is an interface.
+         *
+         * @return true if the class is an interface, false otherwise.
+         */
+        fun isInterface(): Boolean
+
+        /**
+         * Checks if the class is an annotation type.
+         *
+         * @return true if the class is an annotation type, false otherwise
+         */
+        fun isAnnotationType(): Boolean
+
+        /**
+         * Checks if the class is an enumeration.
+         *
+         * @return true if the class is an enumeration, false otherwise.
+         */
+        fun isEnum(): Boolean
+
         fun fieldCnt(): Int
 
         fun methodCnt(): Int
 
+        fun toJson(): String?
+
         fun toJson(readGetter: Boolean, readSetter: Boolean): String?
 
+        fun toJson5(): String?
+
         fun toJson5(readGetter: Boolean, readSetter: Boolean): String?
+
+        /**
+         * Returns the base class of this class.
+         * If this class represents either the
+         * [Object] class, an interface, a primitive type, or void, then
+         * null is returned.
+         * {class A extend B} -> B
+         * {class A} -> java.lang.Object
+         * {class A implement IA} -> java.lang.Object
+         * {class A extend B implement IA} -> B
+         * {interface IA} -> null
+         * {interface IA extend IB} -> null
+         *
+         * @return the base class. May return null when jdk is not configured, so no java.lang.Object is found,
+         * or for java.lang.Object itself
+         */
+        fun superClass(): ScriptClassContext?
+
+        /**
+         * Returns the list of classes that this class or interface extends.
+         *
+         * @return the extends list, or null for anonymous classes.
+         */
+        fun extends(): Array<ScriptClassContext>?
+
+        /**
+         * Returns the list of interfaces that this class implements.
+         *
+         * @return the implements list, or null for anonymous classes
+         */
+        fun implements(): Array<ScriptClassContext>?
+
     }
 
     /**
@@ -880,6 +1086,18 @@ abstract class ScriptRuleParser : RuleParser {
             return jvmClassHelper!!.isNormalType(name())
         }
 
+        override fun isInterface(): Boolean {
+            return (getResource() as? PsiClass)?.isInterface ?: false
+        }
+
+        override fun isAnnotationType(): Boolean {
+            return (getResource() as? PsiClass)?.isAnnotationType ?: false
+        }
+
+        override fun isEnum(): Boolean {
+            return (getResource() as? PsiClass)?.isEnum ?: false
+        }
+
         /**
          * Returns whether this class is a primitive
          */
@@ -908,6 +1126,10 @@ abstract class ScriptRuleParser : RuleParser {
             }?.size ?: 0
         }
 
+        override fun toJson(): String? {
+            return toJson(false, false)
+        }
+
         override fun toJson(readGetter: Boolean, readSetter: Boolean): String? {
             return psiClassHelper!!.getTypeObject(
                 psiType, getResource()!!,
@@ -917,18 +1139,70 @@ abstract class ScriptRuleParser : RuleParser {
             }
         }
 
+        override fun toJson5(): String? {
+            return toJson5(false, false)
+        }
+
         override fun toJson5(readGetter: Boolean, readSetter: Boolean): String? {
             return psiClassHelper!!.getTypeObject(
                 psiType, getResource()!!,
                 JsonOption.READ_COMMENT.or(readGetter, readSetter)
             )?.let {
-                ActionContext.getContext()!!.instance(Json5Formatter::class).format(it)
+                actionContext.instance(Json5Formatter::class).format(it)
             }
         }
 
+        override fun superClass(): ScriptClassContext? {
+            val psiClass = getResource() as? PsiClass ?: return null
+            if (psiClass.isInterface || psiClass.isAnnotationType
+                || psiClass.isEnum
+            ) {
+                return null
+            }
+            extends()?.takeIf { it.isNotEmpty() }?.get(0)?.let {
+                return it
+            }
+            return psiClass.superClass?.let { ScriptPsiClassContext(it) }
+        }
+
+        /**
+         * Returns the list of classes that this class or interface extends.
+         *
+         * @return the extends list, or null for anonymous classes.
+         */
+        override fun extends(): Array<ScriptClassContext>? {
+            val duckType = duckTypeHelper!!.resolve(psiType, getPsiContext()!!)
+                    as? SingleDuckType ?: return null
+            return duckTypeHelper.explicit(duckType).extends()?.mapToTypedArray {
+                ScriptExplicitClassContext(it)
+            }
+        }
+
+        /**
+         * Returns the list of interfaces that this class implements.
+         *
+         * @return the implements list, or null for anonymous classes
+         */
+        override fun implements(): Array<ScriptClassContext>? {
+            val duckType = duckTypeHelper!!.resolve(psiType, getPsiContext()!!)
+                    as? SingleDuckType ?: return null
+            return duckTypeHelper.explicit(duckType).implements()?.mapToTypedArray {
+                ScriptExplicitClassContext(it)
+            }
+        }
 
         override fun toString(): String {
             return name()
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is ScriptClassContext) return false
+            return toString() == other.toString()
+        }
+
+        override fun hashCode(): Int {
+            return toString().hashCode()
         }
 
         init {
@@ -974,11 +1248,11 @@ abstract class ScriptRuleParser : RuleParser {
         }
 
         @ScriptIgnore
-        override fun getCore(): Any? {
+        override fun getCore(): Any {
             return duckType
         }
 
-        override fun getName(): String? {
+        override fun getName(): String {
             return duckType.canonicalText()
         }
 
@@ -1034,6 +1308,18 @@ abstract class ScriptRuleParser : RuleParser {
             return jvmClassHelper!!.isNormalType(name())
         }
 
+        override fun isInterface(): Boolean {
+            return duckType is SingleDuckType && duckType.psiClass().isInterface
+        }
+
+        override fun isAnnotationType(): Boolean {
+            return duckType is SingleDuckType && duckType.psiClass().isAnnotationType
+        }
+
+        override fun isEnum(): Boolean {
+            return duckType is SingleDuckType && duckType.psiClass().isEnum
+        }
+
         /**
          * Returns whether this class is a primitive
          */
@@ -1062,6 +1348,10 @@ abstract class ScriptRuleParser : RuleParser {
             }?.size ?: 0
         }
 
+        override fun toJson(): String? {
+            return toJson(false, false)
+        }
+
         override fun toJson(readGetter: Boolean, readSetter: Boolean): String? {
             val resource: PsiElement = getResource() ?: return null
             return psiClassHelper!!.getTypeObject(
@@ -1070,18 +1360,70 @@ abstract class ScriptRuleParser : RuleParser {
             )?.let { RequestUtils.parseRawBody(it) }
         }
 
+        override fun toJson5(): String? {
+            return toJson5(false, false)
+        }
+
         override fun toJson5(readGetter: Boolean, readSetter: Boolean): String? {
             val resource: PsiElement = getResource() ?: return null
             return psiClassHelper!!.getTypeObject(
                 duckType, resource,
                 JsonOption.READ_COMMENT.or(readGetter, readSetter)
             )?.let {
-                ActionContext.getContext()!!.instance(Json5Formatter::class).format(it)
+                actionContext.instance(Json5Formatter::class).format(it)
             }
+        }
+
+        override fun superClass(): ScriptClassContext? {
+            val duckType = this.duckType as? SingleDuckType ?: return null
+            val psiClass = duckType.psiClass()
+            if (psiClass.isInterface || psiClass.isAnnotationType
+                || psiClass.isEnum
+            ) {
+                return null
+            }
+            extends()?.takeIf { it.isNotEmpty() }?.get(0)?.let {
+                return it
+            }
+            return psiClass.superClass?.let { ScriptPsiClassContext(it) }
         }
 
         override fun toString(): String {
             return name()
+        }
+
+        /**
+         * Returns the list of classes that this class or interface extends.
+         *
+         * @return the extends list, or null for anonymous classes.
+         */
+        override fun extends(): Array<ScriptClassContext>? {
+            val duckType = this.duckType as? SingleDuckType ?: return null
+            return duckTypeHelper!!.explicit(duckType).extends()?.mapToTypedArray {
+                ScriptExplicitClassContext(it)
+            }
+        }
+
+        /**
+         * Returns the list of interfaces that this class implements.
+         *
+         * @return the implements list, or null for anonymous classes
+         */
+        override fun implements(): Array<ScriptClassContext>? {
+            val duckType = this.duckType as? SingleDuckType ?: return null
+            return duckTypeHelper!!.explicit(duckType).implements()?.mapToTypedArray {
+                ScriptExplicitClassContext(it)
+            }
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is ScriptClassContext) return false
+            return toString() == other.toString()
+        }
+
+        override fun hashCode(): Int {
+            return toString().hashCode()
         }
     }
 }

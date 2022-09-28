@@ -6,17 +6,12 @@ import com.itangcent.common.constant.Attrs
 import com.itangcent.common.constant.HttpMethod
 import com.itangcent.common.exception.ProcessCanceledException
 import com.itangcent.common.kit.KVUtils
-import com.itangcent.common.kit.KitUtils
 import com.itangcent.common.logger.traceError
 import com.itangcent.common.model.Request
 import com.itangcent.common.model.Response
-import com.itangcent.common.model.getContentType
 import com.itangcent.common.model.hasBodyOrForm
 import com.itangcent.common.utils.*
 import com.itangcent.http.RequestUtils
-import com.itangcent.idea.plugin.StatusRecorder
-import com.itangcent.idea.plugin.Worker
-import com.itangcent.idea.plugin.WorkerStatus
 import com.itangcent.idea.plugin.api.ClassApiExporterHelper
 import com.itangcent.idea.plugin.api.MethodInferHelper
 import com.itangcent.idea.plugin.api.export.condition.ConditionOnDoc
@@ -28,23 +23,27 @@ import com.itangcent.idea.psi.PsiMethodSet
 import com.itangcent.intellij.config.rule.RuleComputer
 import com.itangcent.intellij.config.rule.computer
 import com.itangcent.intellij.context.ActionContext
+import com.itangcent.intellij.extend.takeIfNotOriginal
+import com.itangcent.intellij.extend.unbox
+import com.itangcent.intellij.extend.withBoundary
 import com.itangcent.intellij.jvm.*
 import com.itangcent.intellij.jvm.duck.DuckType
+import com.itangcent.intellij.jvm.duck.SingleDuckType
 import com.itangcent.intellij.jvm.element.ExplicitElement
 import com.itangcent.intellij.jvm.element.ExplicitMethod
 import com.itangcent.intellij.logger.Logger
 import com.itangcent.intellij.psi.ContextSwitchListener
-import com.itangcent.intellij.psi.JsonOption
 import com.itangcent.intellij.psi.PsiClassUtils
 import com.itangcent.intellij.util.*
 import kotlin.reflect.KClass
+
 
 /**
  * An abstract implementation of  [ClassExporter]
  * that exports [Request] from code.
  */
 @ConditionOnDoc("request")
-abstract class RequestClassExporter : ClassExporter, Worker {
+abstract class RequestClassExporter : ClassExporter {
 
     @Inject
     protected val cacheAble: CacheAble? = null
@@ -54,20 +53,6 @@ abstract class RequestClassExporter : ClassExporter, Worker {
 
     override fun support(docType: KClass<*>): Boolean {
         return docType == Request::class
-    }
-
-    private var statusRecorder: StatusRecorder = StatusRecorder()
-
-    override fun status(): WorkerStatus {
-        return statusRecorder.status()
-    }
-
-    override fun waitCompleted() {
-        return statusRecorder.waitCompleted()
-    }
-
-    override fun cancel() {
-        return statusRecorder.cancel()
     }
 
     @Inject
@@ -101,7 +86,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
     protected val methodFilter: MethodFilter? = null
 
     @Inject
-    protected var actionContext: ActionContext? = null
+    protected lateinit var actionContext: ActionContext
 
     @Inject
     protected var apiHelper: ApiHelper? = null
@@ -118,42 +103,48 @@ abstract class RequestClassExporter : ClassExporter, Worker {
     @Inject
     private lateinit var classApiExporterHelper: ClassApiExporterHelper
 
-    override fun export(cls: Any, docHandle: DocHandle, completedHandle: CompletedHandle): Boolean {
+    @Inject
+    protected lateinit var commentResolver: CommentResolver
+
+    override fun export(cls: Any, docHandle: DocHandle): Boolean {
         if (cls !is PsiClass) {
-            completedHandle(cls)
             return false
         }
+        return doExport(cls, docHandle)
+    }
+
+    private fun doExport(cls: PsiClass, docHandle: DocHandle): Boolean {
+
         contextSwitchListener?.switchTo(cls)
-        actionContext!!.checkStatus()
-        statusRecorder.newWork()
-        try {
-            when {
-                !hasApi(cls) -> {
-                    completedHandle(cls)
-                    return false
-                }
-                shouldIgnore(cls) -> {
-                    logger.info("ignore class:" + cls.qualifiedName)
-                    completedHandle(cls)
-                    return true
-                }
+
+        actionContext.checkStatus()
+        val clsQualifiedName = actionContext.callInReadUI { cls.qualifiedName }
+        when {
+            !hasApi(cls) -> {
+                return false
             }
+            shouldIgnore(cls) -> {
+                logger.info("ignore class:$clsQualifiedName")
+                return true
+            }
+        }
 
-            logger.info("search api from:${cls.qualifiedName}")
+        logger.info("search api from: $clsQualifiedName")
 
-            val classExportContext = ClassExportContext(cls)
+        val classExportContext = ClassExportContext(cls)
 
-            ruleComputer.computer(ClassExportRuleKeys.API_CLASS_PARSE_BEFORE, cls)
-            try {
-                processClass(cls, classExportContext)
+        ruleComputer.computer(ClassExportRuleKeys.API_CLASS_PARSE_BEFORE, cls)
 
+        try {
+            processClass(cls, classExportContext)
+            actionContext.withBoundary {
                 val psiMethodSet = PsiMethodSet()
-
                 classApiExporterHelper.foreachMethod(cls) { explicitMethod ->
                     val method = explicitMethod.psi()
                     if (isApi(method)
                         && methodFilter?.checkMethod(method) != false
-                        && psiMethodSet.add(method)) {
+                        && psiMethodSet.add(method)
+                    ) {
                         try {
                             ruleComputer.computer(ClassExportRuleKeys.API_METHOD_PARSE_BEFORE, explicitMethod)
                             exportMethodApi(cls, explicitMethod, classExportContext, docHandle)
@@ -164,14 +155,11 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                         }
                     }
                 }
-            } finally {
-                ruleComputer.computer(ClassExportRuleKeys.API_CLASS_PARSE_AFTER, cls)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             logger.traceError("error to export api from class:" + cls.name, e)
         } finally {
-            statusRecorder.endWork()
-            completedHandle(cls)
+            ruleComputer.computer(ClassExportRuleKeys.API_CLASS_PARSE_AFTER, cls)
         }
         return true
     }
@@ -192,7 +180,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
         docHandle: DocHandle,
     ) {
 
-        actionContext!!.checkStatus()
+        actionContext.checkStatus()
 
         val request = Request()
 
@@ -252,7 +240,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
             val additionalHeaders = additionalHeader!!.lines()
             for (headerStr in additionalHeaders) {
                 cacheAble!!.cache("header" to headerStr) {
-                    val header = KitUtils.safe { additionalParseHelper.parseHeaderFromJson(headerStr) }
+                    val header = safe { additionalParseHelper.parseHeaderFromJson(headerStr) }
                     when {
                         header == null -> {
                             logger.error("error to parse additional header: $headerStr")
@@ -277,7 +265,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
             val additionalParams = additionalParam!!.lines()
             for (paramStr in additionalParams) {
                 cacheAble!!.cache("param" to paramStr) {
-                    val param = KitUtils.safe { additionalParseHelper.parseParamFromJson(paramStr) }
+                    val param = safe { additionalParseHelper.parseParamFromJson(paramStr) }
                     when {
                         param == null -> {
                             logger.error("error to parse additional param: $paramStr")
@@ -306,7 +294,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                 val additionalHeaders = additionalResponseHeader!!.lines()
                 for (headerStr in additionalHeaders) {
                     cacheAble!!.cache("header" to headerStr) {
-                        val header = KitUtils.safe { additionalParseHelper.parseHeaderFromJson(headerStr) }
+                        val header = safe { additionalParseHelper.parseHeaderFromJson(headerStr) }
                         when {
                             header == null -> {
                                 logger.error("error to parse additional response header: $headerStr")
@@ -361,68 +349,97 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                     response, 200
                 )
 
+                val ultimateComment = StringBuilder()
+
                 val typedResponse = parseResponseBody(returnType, fromRule, methodExportContext.element())
 
                 val descOfReturn = docHelper!!.findDocByTag(methodExportContext.psi(), "return")
+
+                val methodReturnMain =
+                    ruleComputer.computer(ClassExportRuleKeys.METHOD_RETURN_MAIN, methodExportContext.element())
+
+                var context: PsiElement = methodExportContext.psi()
+                val methodReturnMainType: DuckType?
+                if (methodReturnMain.isNullOrBlank()) {
+                    methodReturnMainType = methodExportContext.type()
+                } else {
+                    val explicitReturnType = duckTypeHelper.explicit(returnType.unbox() as SingleDuckType)
+                    val explicitField = explicitReturnType.fields().firstOrNull { it.name() == methodReturnMain }
+                    methodReturnMainType = explicitField?.getType()
+                    methodReturnMainType.unbox().cast(SingleDuckType::class)
+                        ?.psiClass()?.let {
+                            context = it
+                        }
+                }
+
                 if (descOfReturn.notNullOrBlank()) {
-                    val methodReturnMain =
-                        ruleComputer.computer(ClassExportRuleKeys.METHOD_RETURN_MAIN, methodExportContext.element())
+
+                    val options: ArrayList<HashMap<String, Any?>> = ArrayList()
+                    val comment = linkExtractor!!.extract(
+                        descOfReturn,
+                        context,
+                        object : AbstractLinkResolve() {
+
+                            override fun linkToPsiElement(plainText: String, linkTo: Any?): String? {
+
+                                psiClassHelper!!.resolveEnumOrStatic(plainText, context, "")
+                                    ?.let { options.addAll(it) }
+
+                                return super.linkToPsiElement(plainText, linkTo)
+                            }
+
+                            override fun linkToType(plainText: String, linkType: PsiType): String? {
+                                return jvmClassHelper!!.resolveClassInType(linkType)?.let {
+                                    linkResolver!!.linkToClass(it)
+                                }
+                            }
+
+                            override fun linkToClass(plainText: String, linkClass: PsiClass): String? {
+                                return linkResolver!!.linkToClass(linkClass)
+                            }
+
+                            override fun linkToField(plainText: String, linkField: PsiField): String? {
+                                return linkResolver!!.linkToProperty(linkField)
+                            }
+
+                            override fun linkToMethod(plainText: String, linkMethod: PsiMethod): String? {
+                                return linkResolver!!.linkToMethod(linkMethod)
+                            }
+
+                            override fun linkToUnresolved(plainText: String): String {
+                                return plainText
+                            }
+                        })
+
+                    if (comment != null) {
+                        ultimateComment.appendLine(comment)
+                    } else {
+                        ultimateComment.appendLine(descOfReturn)
+                    }
+
+                    if (options.notNullOrEmpty()) {
+                        ultimateComment.appendLine(KVUtils.getOptionDesc(options))
+                    }
+                }
+
+                if (methodReturnMainType != null) {
+                    commentResolver.resolveCommentForType(methodReturnMainType, methodExportContext.psi())?.let {
+                        ultimateComment.appendLine(it)
+                    }
+                }
+
+                val ultimateCommentStr = ultimateComment.toString().trimEnd()
+                if (ultimateCommentStr.isNotEmpty()) {
                     if (methodReturnMain.isNullOrBlank()) {
                         requestBuilderListener.appendResponseBodyDesc(
                             methodExportContext,
-                            response, descOfReturn
+                            response, ultimateCommentStr
                         )
                     } else {
-                        val options: ArrayList<HashMap<String, Any?>> = ArrayList()
-                        val comment = linkExtractor!!.extract(
-                            descOfReturn,
-                            methodExportContext.psi(),
-                            object : AbstractLinkResolve() {
-
-                                override fun linkToPsiElement(plainText: String, linkTo: Any?): String? {
-
-                                    psiClassHelper!!.resolveEnumOrStatic(plainText, methodExportContext.psi(), "")
-                                        ?.let { options.addAll(it) }
-
-                                    return super.linkToPsiElement(plainText, linkTo)
-                                }
-
-                                override fun linkToType(plainText: String, linkType: PsiType): String? {
-                                    return jvmClassHelper!!.resolveClassInType(linkType)?.let {
-                                        linkResolver!!.linkToClass(it)
-                                    }
-                                }
-
-                                override fun linkToClass(plainText: String, linkClass: PsiClass): String? {
-                                    return linkResolver!!.linkToClass(linkClass)
-                                }
-
-                                override fun linkToField(plainText: String, linkField: PsiField): String? {
-                                    return linkResolver!!.linkToProperty(linkField)
-                                }
-
-                                override fun linkToMethod(plainText: String, linkMethod: PsiMethod): String? {
-                                    return linkResolver!!.linkToMethod(linkMethod)
-                                }
-
-                                override fun linkToUnresolved(plainText: String): String {
-                                    return plainText
-                                }
-                            })
-
-                        if (comment.notNullOrBlank()) {
-                            if (!KVUtils.addKeyComment(typedResponse, methodReturnMain, comment!!)) {
-                                requestBuilderListener.appendResponseBodyDesc(methodExportContext, response, comment)
-                            }
-                        }
-                        if (options.notNullOrEmpty()) {
-                            if (!KVUtils.addKeyOptions(typedResponse, methodReturnMain, options)) {
-                                requestBuilderListener.appendResponseBodyDesc(
-                                    methodExportContext,
-                                    response,
-                                    KVUtils.getOptionDesc(options)
-                                )
-                            }
+                        if (!KVUtils.addKeyComment(typedResponse, methodReturnMain, ultimateCommentStr)) {
+                            requestBuilderListener.appendResponseBodyDesc(methodExportContext,
+                                response,
+                                ultimateCommentStr)
                         }
                     }
                 }
@@ -450,14 +467,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
     /**
      * unbox queryParam
      */
-    protected fun tinyQueryParam(paramVal: String?): String? {
-        if (paramVal == null) return null
-        var pv = paramVal.trim()
-        while (pv.startsWith("[") && pv.endsWith("]")) {
-            pv = pv.removeSurrounding("[", "]")
-        }
-        return pv
-    }
+    protected fun tinyQueryParam(paramVal: Any?): Any? = paramVal.unbox()
 
     @Deprecated(message = "will be removed soon")
     protected open fun findAttrOfMethod(method: PsiMethod): String? {
@@ -594,7 +604,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                     parameterExportContext,
                     request,
                     parameterExportContext.paramName(),
-                    tinyQueryParam(parameterExportContext.defaultVal() ?: typeObject?.toString()),
+                    tinyQueryParam(parameterExportContext.defaultVal() ?: typeObject),
                     parameterExportContext.required()
                         ?: ruleComputer.computer(ClassExportRuleKeys.PARAM_REQUIRED, parameterExportContext.element())
                         ?: false,
@@ -613,10 +623,11 @@ abstract class RequestClassExporter : ClassExporter, Worker {
             }
 
             if (this.intelligentSettingsHelper.queryExpanded()) {
-                (typeObject as Map<*, *>).flatValid(object : FieldConsumer {
+                typeObject.flatValid(object : FieldConsumer {
                     override fun consume(parent: Map<*, *>?, path: String, key: String, value: Any?) {
                         parameterExportContext.setExt("parent", parent)
                         parameterExportContext.setExt("key", key)
+                        parameterExportContext.setExt("path", path)
                         val fv = deepComponent(value)
                         if (fv == Magics.FILE_STR) {
                             logger.warn("confused file param [$path] for [GET]")
@@ -625,7 +636,10 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                             parameterExportContext,
                             request,
                             path,
-                            tinyQueryParam((parent?.getAs<Boolean>(Attrs.DEFAULT_VALUE_ATTR, key) ?: value).toString()),
+                            tinyQueryParam(
+                                parent?.getAs<Boolean>(Attrs.DEFAULT_VALUE_ATTR, key)
+                                    ?: value
+                            ),
                             parent?.getAs<Boolean>(Attrs.REQUIRED_ATTR, key) ?: false,
                             KVUtils.getUltimateComment(parent?.getAs(Attrs.COMMENT_ATTR), key)
                         )
@@ -645,7 +659,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                     }
                     requestBuilderListener.addParam(
                         parameterExportContext,
-                        request, filedName, tinyQueryParam(fv?.toString()),
+                        request, filedName, tinyQueryParam(fv),
                         required?.getAs(filedName) ?: false,
                         KVUtils.getUltimateComment(comment, filedName)
                     )
@@ -685,11 +699,12 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                     parameterExportContext,
                     request, "Content-Type", "multipart/form-data"
                 )
-                if (this.intelligentSettingsHelper.formExpanded() && typeObject.isComplex()
-                    && (request.getContentType()?.contains("multipart/form-data") == true)
-                ) {
+                if (this.intelligentSettingsHelper.formExpanded()) {
                     typeObject.flatValid(object : FieldConsumer {
                         override fun consume(parent: Map<*, *>?, path: String, key: String, value: Any?) {
+                            parameterExportContext.setExt("parent", parent)
+                            parameterExportContext.setExt("key", key)
+                            parameterExportContext.setExt("path", path)
                             val fv = deepComponent(value)
                             if (fv == Magics.FILE_STR) {
                                 requestBuilderListener.addFormFileParam(
@@ -703,8 +718,9 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                                     parameterExportContext,
                                     request, path,
                                     tinyQueryParam(
-                                        (parent?.getAs<Boolean>(Attrs.DEFAULT_VALUE_ATTR, key) ?: value).toString()
-                                    ),
+                                        (parent?.getAs<Boolean>(Attrs.DEFAULT_VALUE_ATTR, key)
+                                            ?: value.takeIfNotOriginal())
+                                    )?.toString(),
                                     parent?.getAs<Boolean>(Attrs.REQUIRED_ATTR, key) ?: false,
                                     KVUtils.getUltimateComment(parent?.getAs(Attrs.COMMENT_ATTR), key)
                                 )
@@ -720,7 +736,9 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                         parameterExportContext,
                         request, "Content-Type", "application/x-www-form-urlencoded"
                     )
+                    parameterExportContext.setExt("parent", fields)
                     fields.forEachValid { filedName, fieldVal ->
+                        parameterExportContext.setExt("key", filedName)
                         val fv = deepComponent(defaultVal?.get(filedName) ?: fieldVal)
                         if (fv == Magics.FILE_STR) {
                             requestBuilderListener.addFormFileParam(
@@ -732,7 +750,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
                         } else {
                             requestBuilderListener.addFormParam(
                                 parameterExportContext,
-                                request, filedName, null,
+                                request, filedName, fv?.takeIfNotOriginal()?.toString(),
                                 required?.getAs(filedName) ?: false,
                                 KVUtils.getUltimateComment(comment, filedName)
                             )
@@ -742,7 +760,7 @@ abstract class RequestClassExporter : ClassExporter, Worker {
             } else {
                 requestBuilderListener.addFormParam(
                     parameterExportContext,
-                    request, parameterExportContext.paramName(), tinyQueryParam(typeObject?.toString()),
+                    request, parameterExportContext.paramName(), tinyQueryParam(typeObject)?.toString(),
                     parameterExportContext.required()
                         ?: ruleComputer.computer(ClassExportRuleKeys.PARAM_REQUIRED, parameterExportContext.element())
                         ?: false, paramDesc
@@ -841,15 +859,6 @@ abstract class RequestClassExporter : ClassExporter, Worker {
         return this.cache("unbox") {
             return@cache raw().unbox()
         }
-    }
-
-    private fun Any?.unbox(): Any? {
-        if (this is Array<*>) {
-            return this.firstOrNull().unbox()
-        } else if (this is Collection<*>) {
-            return this.firstOrNull().unbox()
-        }
-        return this
     }
 
     //endregion

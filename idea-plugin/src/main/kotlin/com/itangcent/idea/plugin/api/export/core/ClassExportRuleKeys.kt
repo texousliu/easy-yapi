@@ -25,8 +25,9 @@ object ClassExportRuleKeys {
         BooleanRuleMode.ANY
     )
 
-    val IS_QUARKUS_CTRL: RuleKey<Boolean> = SimpleRuleKey(
-        "class.is.quarkus.ctrl",
+    val IS_JAXRS_CTRL: RuleKey<Boolean> = SimpleRuleKey(
+        "class.is.jaxrs.ctrl",
+        arrayOf("class.is.quarkus.ctrl"),
         BooleanRuleMode.ANY
     )
 
@@ -110,6 +111,11 @@ object ClassExportRuleKeys {
 
     val CLASS_PREFIX_PATH: RuleKey<String> = SimpleRuleKey(
         "class.prefix.path",
+        StringRuleMode.SINGLE
+    )
+
+    val ENDPOINT_PREFIX_PATH: RuleKey<String> = SimpleRuleKey(
+        "endpoint.prefix.path",
         StringRuleMode.SINGLE
     )
 

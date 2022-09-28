@@ -17,7 +17,7 @@ import com.itangcent.intellij.logger.Logger
 open class AbstractYapiApiExporter {
 
     @Inject
-    protected val logger: Logger? = null
+    protected lateinit var logger: Logger
 
     @Inject
     protected val yapiApiHelper: YapiApiHelper? = null
@@ -26,7 +26,7 @@ open class AbstractYapiApiExporter {
     protected lateinit var yapiSettingsHelper: YapiSettingsHelper
 
     @Inject
-    protected val actionContext: ActionContext? = null
+    protected lateinit var actionContext: ActionContext
 
     @Inject
     protected val classExporter: ClassExporter? = null
@@ -59,10 +59,10 @@ open class AbstractYapiApiExporter {
     protected open fun getCartForResource(resource: Any): CartInfo? {
 
         //get token
-        val module = actionContext!!.callInReadUI { moduleHelper!!.findModule(resource) } ?: return null
+        val module = actionContext.callInReadUI { moduleHelper!!.findModule(resource) } ?: return null
         val privateToken = getTokenOfModule(module)
         if (privateToken == null) {
-            logger!!.info("No token be found for $module")
+            logger.info("No token be found for $module")
             return null
         }
 
@@ -83,16 +83,16 @@ open class AbstractYapiApiExporter {
 
         //try find existed cart.
         try {
-            cartId = yapiApiHelper!!.findCat(privateToken, name)
+            cartId = yapiApiHelper!!.findCart(privateToken, name)
         } catch (e: Exception) {
-            logger!!.traceError("error to find cart [$name]", e)
+            logger.traceError("error to find cart [$name]", e)
             return null
         }
 
         //create new cart.
         if (cartId == null) {
             if (yapiApiHelper.addCart(privateToken, name, folder.attr ?: "")) {
-                cartId = yapiApiHelper.findCat(privateToken, name)
+                cartId = yapiApiHelper.findCart(privateToken, name)
             } else {
                 //failed
                 return null

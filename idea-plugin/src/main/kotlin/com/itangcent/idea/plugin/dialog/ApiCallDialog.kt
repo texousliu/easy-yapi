@@ -11,31 +11,27 @@ import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.ComboBoxCellEditor
 import com.itangcent.cache.HttpContextCacheHelper
 import com.itangcent.common.constant.HttpMethod
-import com.itangcent.common.kit.KitUtils
+import com.itangcent.common.logger.Log
 import com.itangcent.common.logger.traceError
 import com.itangcent.common.model.FormParam
 import com.itangcent.common.model.Request
 import com.itangcent.common.model.hasBodyOrForm
-import com.itangcent.common.utils.appendlnIfNotEmpty
-import com.itangcent.common.utils.firstOrNull
-import com.itangcent.common.utils.notNullOrBlank
-import com.itangcent.common.utils.notNullOrEmpty
+import com.itangcent.common.utils.*
 import com.itangcent.http.*
 import com.itangcent.idea.binder.DbBeanBinderFactory
 import com.itangcent.idea.icons.EasyIcons
 import com.itangcent.idea.icons.iconOnly
 import com.itangcent.idea.plugin.api.call.ApiCallUI
+import com.itangcent.idea.plugin.utils.CompensateRateLimiter
 import com.itangcent.idea.psi.resourceClass
 import com.itangcent.idea.psi.resourceMethod
 import com.itangcent.idea.utils.*
-import com.itangcent.intellij.context.ActionContext
-import com.itangcent.intellij.extend.guice.PostConstruct
 import com.itangcent.intellij.extend.rx.AutoComputer
 import com.itangcent.intellij.extend.rx.Mode
 import com.itangcent.intellij.extend.rx.ThrottleHelper
 import com.itangcent.intellij.extend.rx.mutual
+import com.itangcent.intellij.extend.withBoundary
 import com.itangcent.intellij.file.LocalFileRepository
-import com.itangcent.intellij.logger.Logger
 import com.itangcent.intellij.psi.PsiClassUtils
 import com.itangcent.suv.http.HttpClientProvider
 import org.apache.commons.lang3.RandomUtils
@@ -46,6 +42,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.awt.event.*
 import java.io.Closeable
+import java.util.concurrent.TimeUnit
 import javax.swing.*
 import javax.swing.event.TableModelListener
 import javax.swing.table.DefaultTableModel
@@ -53,23 +50,30 @@ import javax.swing.table.TableColumn
 import javax.swing.table.TableModel
 
 
-class ApiCallDialog : JDialog(), ApiCallUI {
+@Suppress("UnstableApiUsage")
+class ApiCallDialog : ContextDialog(), ApiCallUI {
     private var contentPane: JPanel? = null
 
+    private var apisListPanel: JPanel? = null
     private var apisJList: JList<*>? = null
     private var apisPopMenu: JPopupMenu? = null
+
+    private var rightPanel: JPanel? = null
+
+    private var topPanel: JPanel? = null
 
     private var callButton: JButton? = null
     private var requestBodyTextArea: JTextArea? = null
     private var responseTextArea: JTextArea? = null
     private var pathTextField: JTextField? = null
-    private var methodLabel: JLabel? = null
 
+    private var methodLabel: JLabel? = null
     private var requestPanel: JBTabbedPane? = null
     private var requestBodyPanel: JPanel? = null
     private var requestHeaderPanel: JPanel? = null
     private var formTable: JBTable? = null
 
+    private var responsePanel: JBTabbedPane? = null
     private var formatOrRawButton: JButton? = null
     private var saveButton: JButton? = null
     private var responseActionPanel: JPanel? = null
@@ -98,18 +102,13 @@ class ApiCallDialog : JDialog(), ApiCallUI {
 
     private var hostComboBox: JComboBox<String>? = null
 
-    @Inject
-    private lateinit var logger: Logger
-
-    @Inject
-    lateinit var actionContext: ActionContext
-
     private val requestRawInfoBinderFactory: DbBeanBinderFactory<RequestRawInfo> by lazy {
         DbBeanBinderFactory(projectCacheRepository!!.getOrCreateFile(".api.call.v1.0.db").path)
         { NULL_REQUEST_INFO_CACHE }
     }
 
     init {
+        LOG.info("create ApiCallDialog")
         setContentPane(contentPane)
         getRootPane().defaultButton = callButton
 
@@ -179,13 +178,47 @@ class ApiCallDialog : JDialog(), ApiCallUI {
         EasyIcons.Run.iconOnly(this.callButton)
     }
 
-    @PostConstruct
-    fun postConstruct() {
-        actionContext.hold()
+    override fun init() {
+        LOG.info("init ApiCallDialog")
+        actionContext.keepAlive(TimeUnit.HOURS.toMillis(1))
 
+        LOG.info("init ApisModule")
         initApisModule()
+        LOG.info("init RequestModule")
         initRequestModule()
+        LOG.info("init ResponseModule")
         initResponseModule()
+        resize()
+        this.onResized {
+            resize()
+        }
+        this.requestPanel!!.onResized {
+            resize()
+        }
+        this.responsePanel!!.onResized {
+            resize()
+        }
+    }
+
+    private val rateLimiter = CompensateRateLimiter.create(10)
+
+    private fun resize() {
+        rateLimiter.tryAcquire {
+            actionContext.runInSwingUI {
+                val rightWidth = this.contentPane!!.width - this.apisListPanel!!.width
+
+                val rightPanel = this.rightPanel!!
+                rightPanel.setSizeIfNecessary(rightWidth, this.contentPane!!.height - 6)
+
+                val requestPanel = this.requestPanel!!
+                requestPanel.setSizeIfNecessary(rightWidth - 30, requestPanel.height)
+
+                this.responsePanel!!.let {
+                    it.setSizeIfNecessary(rightWidth - 30, it.height)
+                    it.bottomAlignTo(this.apisJList!!)
+                }
+            }
+        }
     }
 
     //region api module
@@ -237,16 +270,19 @@ class ApiCallDialog : JDialog(), ApiCallUI {
         if (requestList == null) {
             return
         }
-        val requestRawList = ArrayList<ApiInfo>(requestList.size)
-        val requestRawViewList = ArrayList<RequestRawInfo>(requestList.size)
-        requestList.forEach { request ->
-            val rawInfo = rawInfo(request)
-            requestRawList.add(ApiInfo(request, rawInfo))
-            val beanBinder = this.requestRawInfoBinderFactory.getBeanBinder(rawInfo.cacheKey())
-            requestRawViewList.add(beanBinder.tryRead() ?: rawInfo.copy())
+        doAfterInit {
+            val requestRawList = ArrayList<ApiInfo>(requestList.size)
+            val requestRawViewList = ArrayList<RequestRawInfo>(requestList.size)
+            requestList.forEach { request ->
+                val rawInfo = rawInfo(request)
+                requestRawList.add(ApiInfo(request, rawInfo))
+                val beanBinder = this.requestRawInfoBinderFactory.getBeanBinder(rawInfo.cacheKey())
+                requestRawViewList.add(beanBinder.tryRead() ?: rawInfo.copy())
+            }
+            autoComputer.value(this::apiList, requestRawList)
+            autoComputer.value(this::requestRawViewList, requestRawViewList)
+            resize()
         }
-        autoComputer.value(this::apiList, requestRawList)
-        autoComputer.value(this::requestRawViewList, requestRawViewList)
     }
 
     private fun resetCurrentRequestView() {
@@ -326,7 +362,6 @@ class ApiCallDialog : JDialog(), ApiCallUI {
                 .eval { headers -> if (headers == selectedRequestRawInfo()?.headers) "Header" else "Header*" }
         }
 
-
         autoComputer.bind(this.requestBodyTextArea!!)
             .mutual(this, "this.currRequest.body")
 
@@ -374,6 +409,7 @@ class ApiCallDialog : JDialog(), ApiCallUI {
             if (requestChangeThrottle.acquire(100)) {
                 contentTypeChangeThrottle.refresh()
                 formatForm(it)
+                resize()
             }
         }
 
@@ -576,11 +612,11 @@ class ApiCallDialog : JDialog(), ApiCallUI {
                         return
                     }
 
-                    val selectColumn = formTable.tableHeader.columnAtPoint(e.point);
+                    val selectColumn = formTable.tableHeader.columnAtPoint(e.point)
                     if (selectColumn == columnIndex) {
                         allSelected = !allSelected
 
-                        formTable.columnModel.getColumn(columnIndex).headerValue = allSelected;
+                        formTable.columnModel.getColumn(columnIndex).headerValue = allSelected
                         for (rowIndex in 0 until formTable.rowCount) {
                             formTable.setValueAt(allSelected, rowIndex, columnIndex)
                         }
@@ -638,7 +674,7 @@ class ApiCallDialog : JDialog(), ApiCallUI {
                     if (model === formTable.model && model.rowCount > 0) {
                         request.formParams = readForm(model, false)
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                 }
             }
             model.addTableModelListener(tableModelListener)
@@ -866,9 +902,11 @@ class ApiCallDialog : JDialog(), ApiCallUI {
     }
 
     private fun refreshHosts() {
-        val hosts = httpContextCacheHelper.getHosts()
-        actionContext.runInSwingUI {
-            this.hostComboBox!!.model = DefaultComboBoxModel(hosts.toTypedArray())
+        actionContext.withBoundary {
+            val hosts = httpContextCacheHelper.getHosts()
+            actionContext.runInSwingUI {
+                this.hostComboBox!!.model = DefaultComboBoxModel(hosts.toTypedArray())
+            }
         }
     }
 
@@ -884,7 +922,7 @@ class ApiCallDialog : JDialog(), ApiCallUI {
 
         val requestHeader = this.requestHeadersTextArea!!.text
         val requestBodyOrForm = this.requestBodyTextArea!!.text
-        val contentType = this.contentTypeComboBox!!.selectedItem.toString()
+        val contentType = this.contentTypeComboBox!!.selectedItem?.toString() ?: ""
         actionContext.runAsync {
             onNewHost(host)
             var url: String? = null
@@ -962,7 +1000,10 @@ class ApiCallDialog : JDialog(), ApiCallUI {
 
         autoComputer.bind(this.responseTextArea!!)
             .with(this::currResponse)
-            .eval { it?.getResponseAsString() ?: "" }
+            .eval {
+                resize()
+                it?.getResponseAsString() ?: ""
+            }
 
         autoComputer.bindVisible(this.responseActionPanel!!)
             .with(this::currResponse)
@@ -1043,6 +1084,7 @@ class ApiCallDialog : JDialog(), ApiCallUI {
                         val suffix = url.substring(dotIndex).substringBefore("\\//?&")
                         "$name.$suffix"
                     }
+
                     else -> url.substringAfterLast("/").substringBefore("?")
                 }
             }
@@ -1055,21 +1097,25 @@ class ApiCallDialog : JDialog(), ApiCallUI {
             logger.info("cancel save response")
         })
     }
+
     //endregion
 
-    private fun onCancel() {
-        httpClient?.cookieStore()?.cookies()?.let { httpContextCacheHelper.addCookies(it) }
-        this.requestRawViewList?.forEachIndexed { index, requestRawInfo ->
-            if (requestRawInfo != this.apiList!![index].raw) {
-                this.requestRawInfoBinderFactory.getBeanBinder(requestRawInfo.cacheKey())
-                    .save(requestRawInfo)
+    override fun onDispose() {
+        try {
+            httpClient?.cookieStore()?.cookies()?.let { httpContextCacheHelper.addCookies(it) }
+            this.requestRawViewList?.forEachIndexed { index, requestRawInfo ->
+                if (requestRawInfo != this.apiList!![index].raw) {
+                    this.requestRawInfoBinderFactory.getBeanBinder(requestRawInfo.cacheKey())
+                        .save(requestRawInfo)
+                }
             }
+            if (httpClient != null && httpClient is Closeable) {
+                (httpClient!! as Closeable).close()
+            }
+        } catch (e: Exception) {
+            logger.traceError("failed save cookie", e)
         }
-        if (httpClient != null && httpClient is Closeable) {
-            (httpClient!! as Closeable).close()
-        }
-        dispose()
-        actionContext.unHold()
+        super.onDispose()
     }
 
     class ResponseStatus(var response: HttpResponse) {
@@ -1087,13 +1133,14 @@ class ApiCallDialog : JDialog(), ApiCallUI {
                     formatResult = formatResponse()
                     formatResult
                 }
+
                 else -> getRawResult()
             }
         }
 
         private fun formatResponse(): String? {
             return try {
-                val contentType = KitUtils.safe { response.contentType()?.let { ContentType.parse(it) } }
+                val contentType = safe { response.contentType()?.let { ContentType.parse(it) } }
                 if (contentType != null) {
                     if (contentType.mimeType.startsWith("text/html") ||
                         contentType.mimeType.startsWith("text/xml")
@@ -1278,7 +1325,7 @@ class ApiCallDialog : JDialog(), ApiCallUI {
         return requestRawInfo
     }
 
-    companion object {
+    companion object : Log() {
         var CONTENT_TYPES: Array<String> = arrayOf(
             "",
             "application/json",

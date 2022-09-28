@@ -7,7 +7,7 @@ curl -X GET http://localhost:8080/user/greeting
 
 ## get user info
 ```bash
-curl -X GET -H 'token: ' http://localhost:8080/user/get/{id}?id=0
+curl -X GET -H 'token: ' http://localhost:8080/user/get/{id}?id=
 ```
 
 ---
@@ -97,16 +97,44 @@ curl -X GET -H 'token: ' http://localhost:8080/test/return/result/Void
 
 ---
 
+## test api return Enum
+```bash
+curl -X GET -H 'token: ' http://localhost:8080/test/return/enum
+```
+
+---
+
+## test api return Result<Enum>
+```bash
+curl -X GET -H 'token: ' http://localhost:8080/test/return/result/enum
+```
+
+---
+
+## test api return Enum field
+```bash
+curl -X GET -H 'token: ' http://localhost:8080/test/return/enum/field
+```
+
+---
+
+## test api return Result<Enum field>
+```bash
+curl -X GET -H 'token: ' http://localhost:8080/test/return/result/enum/field
+```
+
+---
+
 ## return nested node
 ```bash
-curl -X POST -H 'Content-Type: multipart/form-data' -H 'token: ' -F 'id=' -F 'code=' -F 'parent.id=' -F 'parent.code=' -F 'parent.parent.id=' -F 'parent.parent.code=' -F 'parent.sub[0].id=' -F 'parent.sub[0].code=' -F 'parent.sub[0].parent.id=' -F 'parent.sub[0].parent.code=' -F 'parent.siblings[0].id=' -F 'parent.siblings[0].code=' -F 'parent.siblings[0].parent.id=' -F 'parent.siblings[0].parent.code=' -F 'parent.siblings[0].sub[0].id=' -F 'parent.siblings[0].sub[0].code=' -F 'parent.siblings[0].sub[0].parent.id=' -F 'parent.siblings[0].sub[0].parent.code=' -F 'sub[0].id=' -F 'sub[0].code=' -F 'sub[0].parent.id=' -F 'sub[0].parent.code=' -F 'sub[0].sub[0].id=' -F 'sub[0].sub[0].code=' -F 'sub[0].sub[0].parent.id=' -F 'sub[0].sub[0].parent.code=' -F 'sub[0].siblings[0].id=' -F 'sub[0].siblings[0].code=' -F 'sub[0].siblings[0].parent.id=' -F 'sub[0].siblings[0].parent.code=' -F 'sub[0].siblings[0].sub[0].id=' -F 'sub[0].siblings[0].sub[0].code=' -F 'sub[0].siblings[0].sub[0].parent.id=' -F 'sub[0].siblings[0].sub[0].parent.code=' -F 'siblings[0].id=' -F 'siblings[0].code=' -F 'siblings[0].parent.id=' -F 'siblings[0].parent.code=' -F 'siblings[0].sub[0].id=' -F 'siblings[0].sub[0].code=' -F 'siblings[0].sub[0].parent.id=' -F 'siblings[0].sub[0].parent.code=' -F 'siblings[0].siblings[0].id=' -F 'siblings[0].siblings[0].code=' -F 'siblings[0].siblings[0].parent.id=' -F 'siblings[0].siblings[0].parent.code=' -F 'siblings[0].siblings[0].sub[0].id=' -F 'siblings[0].siblings[0].sub[0].code=' -F 'siblings[0].siblings[0].sub[0].parent.id=' -F 'siblings[0].siblings[0].sub[0].parent.code=' http://localhost:8080/test/return/node
+curl -X POST -H 'Content-Type: multipart/form-data' -H 'token: ' -F 'id=' -F 'code=' -F 'parent.id=' -F 'parent.code=' -F 'parent.parent.key=' -F 'parent.sub[0].key=' -F 'parent.siblings[0].key=' -F 'sub[0].id=' -F 'sub[0].code=' -F 'sub[0].parent.key=' -F 'sub[0].sub[0].key=' -F 'sub[0].siblings[0].key=' -F 'siblings[0].id=' -F 'siblings[0].code=' -F 'siblings[0].parent.key=' -F 'siblings[0].sub[0].key=' -F 'siblings[0].siblings[0].key=' http://localhost:8080/test/return/node
 ```
 
 ---
 
 ## return root with nested nodes
 ```bash
-curl -X GET -H 'token: ' http://localhost:8080/test/return/root?id=\&children[0].id=\&children[0].code=\&children[0].parent.id=\&children[0].parent.code=\&children[0].parent.parent.id=\&children[0].parent.parent.code=\&children[0].parent.sub[0].id=\&children[0].parent.sub[0].code=\&children[0].parent.sub[0].parent.id=\&children[0].parent.sub[0].parent.code=\&children[0].parent.siblings[0].id=\&children[0].parent.siblings[0].code=\&children[0].parent.siblings[0].parent.id=\&children[0].parent.siblings[0].parent.code=\&children[0].parent.siblings[0].sub[0].id=\&children[0].parent.siblings[0].sub[0].code=\&children[0].parent.siblings[0].sub[0].parent.id=\&children[0].parent.siblings[0].sub[0].parent.code=\&children[0].sub[0].id=\&children[0].sub[0].code=\&children[0].sub[0].parent.id=\&children[0].sub[0].parent.code=\&children[0].sub[0].sub[0].id=\&children[0].sub[0].sub[0].code=\&children[0].sub[0].sub[0].parent.id=\&children[0].sub[0].sub[0].parent.code=\&children[0].sub[0].siblings[0].id=\&children[0].sub[0].siblings[0].code=\&children[0].sub[0].siblings[0].parent.id=\&children[0].sub[0].siblings[0].parent.code=\&children[0].sub[0].siblings[0].sub[0].id=\&children[0].sub[0].siblings[0].sub[0].code=\&children[0].sub[0].siblings[0].sub[0].parent.id=\&children[0].sub[0].siblings[0].sub[0].parent.code=\&children[0].siblings[0].id=\&children[0].siblings[0].code=\&children[0].siblings[0].parent.id=\&children[0].siblings[0].parent.code=\&children[0].siblings[0].sub[0].id=\&children[0].siblings[0].sub[0].code=\&children[0].siblings[0].sub[0].parent.id=\&children[0].siblings[0].sub[0].parent.code=\&children[0].siblings[0].siblings[0].id=\&children[0].siblings[0].siblings[0].code=\&children[0].siblings[0].siblings[0].parent.id=\&children[0].siblings[0].siblings[0].parent.code=\&children[0].siblings[0].siblings[0].sub[0].id=\&children[0].siblings[0].siblings[0].sub[0].code=\&children[0].siblings[0].siblings[0].sub[0].parent.id=\&children[0].siblings[0].siblings[0].sub[0].parent.code=
+curl -X GET -H 'token: ' http://localhost:8080/test/return/root?id=\&children[0].id=\&children[0].code=\&children[0].parent.key=\&children[0].sub[0].key=\&children[0].siblings[0].key=
 ```
 
 ---
@@ -120,28 +148,28 @@ curl -X GET -H 'token: ' http://localhost:8080/test/return/customMap?key=
 
 ## user page query
 ```bash
-curl -X GET -H 'token: ' http://localhost:8080/test/call/page/user?size=\&user.id=0\&user.type=0\&user.name=\&user.age=0\&user.sex=0\&user.birthDay=\&user.regtime=\&users[0].id=0\&users[0].type=0\&users[0].name=\&users[0].age=0\&users[0].sex=0\&users[0].birthDay=\&users[0].regtime=\&t.id=0\&t.type=0\&t.name=\&t.age=0\&t.sex=0\&t.birthDay=\&t.regtime=
+curl -X GET -H 'token: ' http://localhost:8080/test/call/page/user?size=\&user.id=\&user.type=\&user.name=\&user.age=\&user.sex=\&user.birthDay=\&user.regtime=\&users[0].id=\&users[0].type=\&users[0].name=\&users[0].age=\&users[0].sex=\&users[0].birthDay=\&users[0].regtime=\&t.id=\&t.type=\&t.name=\&t.age=\&t.sex=\&t.birthDay=\&t.regtime=
 ```
 
 ---
 
 ## user page query with ModelAttribute
 ```bash
-curl -X POST -H 'Content-Type: multipart/form-data' -H 'token: ' -F 'size=' -F 'user.id=0' -F 'user.type=0' -F 'user.name=' -F 'user.age=0' -F 'user.sex=0' -F 'user.birthDay=' -F 'user.regtime=' -F 'users[0].id=0' -F 'users[0].type=0' -F 'users[0].name=' -F 'users[0].age=0' -F 'users[0].sex=0' -F 'users[0].birthDay=' -F 'users[0].regtime=' -F 't.id=0' -F 't.type=0' -F 't.name=' -F 't.age=0' -F 't.sex=0' -F 't.birthDay=' -F 't.regtime=' http://localhost:8080/test/call/page/user/form
+curl -X POST -H 'Content-Type: multipart/form-data' -H 'token: ' -F 'size=' -F 'user.id=' -F 'user.type=' -F 'user.name=' -F 'user.age=' -F 'user.sex=' -F 'user.birthDay=' -F 'user.regtime=' -F 'users[0].id=' -F 'users[0].type=' -F 'users[0].name=' -F 'users[0].age=' -F 'users[0].sex=' -F 'users[0].birthDay=' -F 'users[0].regtime=' -F 't.id=' -F 't.type=' -F 't.name=' -F 't.age=' -F 't.sex=' -F 't.birthDay=' -F 't.regtime=' http://localhost:8080/test/call/page/user/form
 ```
 
 ---
 
 ## user page query with POST
 ```bash
-curl -X POST -H 'Content-Type: multipart/form-data' -H 'token: ' -F 'size=' -F 'user.id=0' -F 'user.type=0' -F 'user.name=' -F 'user.age=0' -F 'user.sex=0' -F 'user.birthDay=' -F 'user.regtime=' -F 'users[0].id=0' -F 'users[0].type=0' -F 'users[0].name=' -F 'users[0].age=0' -F 'users[0].sex=0' -F 'users[0].birthDay=' -F 'users[0].regtime=' -F 't.id=0' -F 't.type=0' -F 't.name=' -F 't.age=0' -F 't.sex=0' -F 't.birthDay=' -F 't.regtime=' http://localhost:8080/test/call/page/user/post
+curl -X POST -H 'Content-Type: multipart/form-data' -H 'token: ' -F 'size=' -F 'user.id=' -F 'user.type=' -F 'user.name=' -F 'user.age=' -F 'user.sex=' -F 'user.birthDay=' -F 'user.regtime=' -F 'users[0].id=' -F 'users[0].type=' -F 'users[0].name=' -F 'users[0].age=' -F 'users[0].sex=' -F 'users[0].birthDay=' -F 'users[0].regtime=' -F 't.id=' -F 't.type=' -F 't.name=' -F 't.age=' -F 't.sex=' -F 't.birthDay=' -F 't.regtime=' http://localhost:8080/test/call/page/user/post
 ```
 
 ---
 
 ## user page query with array
 ```bash
-curl -X GET -H 'token: ' http://localhost:8080/test/call/page/user/array?id=0\&type=0\&name=\&age=0\&sex=0\&birthDay=\&regtime=
+curl -X GET -H 'token: ' http://localhost:8080/test/call/page/user/array?id=\&type=\&name=\&age=\&sex=\&birthDay=\&regtime=
 ```
 
 ---

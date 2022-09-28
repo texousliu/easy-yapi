@@ -5,18 +5,19 @@ import com.google.inject.Singleton
 import com.intellij.psi.*
 import com.intellij.psi.util.*
 import com.itangcent.common.kit.KVUtils
+import com.itangcent.common.logger.Log
 import com.itangcent.common.logger.traceError
 import com.itangcent.common.utils.*
 import com.itangcent.idea.plugin.settings.SettingBinder
 import com.itangcent.idea.plugin.settings.helper.IntelligentSettingsHelper
 import com.itangcent.intellij.config.rule.RuleComputer
 import com.itangcent.intellij.context.ActionContext
-import com.itangcent.intellij.jvm.DuckTypeHelper
-import com.itangcent.intellij.jvm.JvmClassHelper
-import com.itangcent.intellij.jvm.PsiClassHelper
-import com.itangcent.intellij.jvm.PsiResolver
+import com.itangcent.intellij.jvm.*
 import com.itangcent.intellij.logger.Logger
-import com.itangcent.intellij.psi.*
+import com.itangcent.intellij.psi.ClassRuleKeys
+import com.itangcent.intellij.psi.ObjectHolder
+import com.itangcent.intellij.psi.PsiClassUtils
+import com.itangcent.intellij.psi.getOrResolve
 import com.itangcent.intellij.util.Magics
 import com.siyeh.ig.psiutils.ClassUtils
 import java.lang.reflect.Method
@@ -84,7 +85,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
         psiMethod: PsiMethod,
         caller: Any? = null,
         args: Array<Any?>?,
-        option: Int = DEFAULT_OPTION
+        option: Int = DEFAULT_OPTION,
     ): Any? {
         actionContext!!.checkStatus()
         if (methodStack.size < intelligentSettingsHelper.inferMaxDeep()) {
@@ -141,6 +142,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                 copy.sortByDescending { pointOf(it) }
                 return copy
             }
+
             is Map<*, *> -> {
                 if (this.isEmpty() || this.size == 1) {
                     return this
@@ -156,6 +158,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                 }
                 return copy
             }
+
             is Variable -> return this.getValue().cleanInvalidKeys()
         }
         return this
@@ -168,9 +171,11 @@ class DefaultMethodInferHelper : MethodInferHelper {
             is Collection<*> -> {
                 return 2 + obj.map { pointOf(it) }.sum()
             }
+
             is Map<*, *> -> {
                 return 3 + obj.entries.map { pointOf(it.key) + pointOf(it.value) }.sum()
             }
+
             is Variable -> return pointOf(obj.getValue())
             is String -> return if (obj.isEmpty()) 1 else 2
         }
@@ -211,7 +216,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
         context: PsiElement?,
         psiMethod: PsiMethod,
         caller: Any? = null,
-        args: Array<Any?>?
+        args: Array<Any?>?,
     ): Any? {
         actionContext!!.checkStatus()
         try {
@@ -420,6 +425,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                 val fixArgs = Array<Any?>(method.parameterCount) { null }
                 method.invoke(caller, fixArgs)
             }
+
             args == null || args.isEmpty() -> method.invoke(caller)
             args.size == 1 -> method.invoke(caller, args[0])
             args.size == 2 -> method.invoke(caller, args[0], args[1])
@@ -514,7 +520,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
     private var collection_add_method: PsiMethod? = null
     private var collection_addAll_method: PsiMethod? = null
 
-    companion object {
+    companion object : Log() {
 
         private const val ALLOW_QUICK_CALL: Int = 0b0001
 
@@ -557,47 +563,55 @@ class DefaultMethodInferHelper : MethodInferHelper {
                 return when {
                     !needCompute(obj) -> obj
                     obj is Variable -> valueOf(obj.getValue())
-                    obj is Delay -> valueOf(obj.unwrap())
+                    obj is ObjectHolder -> valueOf(obj.getOrResolve())
                     obj is MutableMap<*, *> -> {
                         val copy = KV.create<Any?, Any?>()
                         obj.entries.forEach { copy[valueOf(it.key)] = valueOf(it.value) }
                         return copy
                     }
+
                     obj is Array<*> -> {
                         val copy = LinkedList<Any?>()
                         obj.any { copy.add(valueOf(it)) }
                         return copy.toArray()
                     }
+
                     obj is Collection<*> -> {
                         val copy = LinkedList<Any?>()
                         obj.any { copy.add(valueOf(it)) }
                         return copy
                     }
+
                     else -> obj
                 }
             } catch (e: Exception) {
-                LOG.error("failed compute valueOf $obj", e)
+                LOG.traceError("failed compute valueOf $obj", e)
                 return null
             }
         }
 
-        private fun needCompute(obj: Any?): Boolean {
+        private fun needCompute(obj: Any?, deep: Int = 0): Boolean {
+            if (deep > 10) {
+                return false
+            }
             return when (obj) {
                 null -> false
                 is Variable -> true
-                is Delay -> true
+                is ObjectHolder -> true
                 is MutableMap<*, *> -> {
-                    obj.entries.any { needCompute(it.key) || needCompute(it.value) }
+                    obj.entries.any { needCompute(it.key, deep + 1) || needCompute(it.value, deep + 1) }
                 }
+
                 is Array<*> -> {
-                    obj.any { needCompute(it) }
+                    obj.any { needCompute(it, deep + 1) }
                 }
+
                 is Collection<*> -> {
-                    obj.any { needCompute(it) }
+                    obj.any { needCompute(it, deep + 1) }
                 }
+
                 else -> false
             }
-
         }
 
         fun assignment(target: Any?, value: Any?) {
@@ -618,38 +632,6 @@ class DefaultMethodInferHelper : MethodInferHelper {
                 return null
             }
             return obj as ArrayList<Any?>?
-        }
-
-        fun merge(a: Any?, b: Any?): Any? {
-            if (a == null) {
-                return valueOf(b)
-            } else if (b == null) {
-                return valueOf(a)
-            }
-
-            val ua = valueOf(a)
-            val ub = valueOf(b)
-
-            if (ua is Map<*, *> && ub is Map<*, *>) {
-                val res: HashMap<Any?, Any?> = LinkedHashMap()
-                res.putAll(ua)
-                res.putAll(ub)
-                return res
-            }
-
-            if (ua is Collection<*> && ub is Collection<*>) {
-                val res: ArrayList<Any?> = ArrayList()
-                res.addAll(ua)
-                res.addAll(ub)
-                return res
-            }
-
-            if (ub is Map<*, *>) {
-                return ub
-            }
-
-            //not merge
-            return ua
         }
 
         fun findComplexResult(a: Any?, b: Any?): Any? {
@@ -747,12 +729,20 @@ class DefaultMethodInferHelper : MethodInferHelper {
             psiType is PsiArrayType -> {
                 return psiClassHelper.getTypeObject(psiType, context, simpleJsonOption)
             }
+
             jvmClassHelper!!.isCollection(psiType) -> {   //list type
                 return psiClassHelper.getTypeObject(psiType, context, jsonOption)
             }
+
             jvmClassHelper.isMap(psiType) -> {   //map type
                 return psiClassHelper.getTypeObject(psiType, context, simpleJsonOption)
             }
+
+            jvmClassHelper.isEnum(psiType) -> {
+                //return "" by default
+                return ""
+            }
+
             else -> {
                 val typeCanonicalText = psiType.canonicalText
                 if (typeCanonicalText.contains('<') && typeCanonicalText.endsWith('>')) {
@@ -780,12 +770,15 @@ class DefaultMethodInferHelper : MethodInferHelper {
             psiType is PsiArrayType -> {
                 return psiClassHelper.getTypeObject(psiType, context, simpleJsonOption)
             }
+
             jvmClassHelper!!.isCollection(psiType) -> {   //list type
                 return psiClassHelper.getTypeObject(psiType, context, simpleJsonOption)
             }
+
             jvmClassHelper.isMap(psiType) -> {   //map type
                 return psiClassHelper.getTypeObject(psiType, context, simpleJsonOption)
             }
+
             else -> {
                 val paramCls = PsiUtil.resolveClassInClassTypeOnly(psiType) ?: return null
                 if (ruleComputer!!.computer(ClassRuleKeys.TYPE_IS_FILE, paramCls) == true) {
@@ -901,7 +894,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
     abstract class AbstractMethodReturnInfer(
         var caller: Any? = null,
         val args: Array<Any?>?,
-        val methodReturnInferHelper: DefaultMethodInferHelper
+        val methodReturnInferHelper: DefaultMethodInferHelper,
     ) : Infer {
 
         var localParams: HashMap<String, Any?> = HashMap()
@@ -928,28 +921,34 @@ class DefaultMethodInferHelper : MethodInferHelper {
                     }
                     return variable
                 }
+
                 is PsiIfStatement -> {
                     statement.elseBranch?.let { processStatement(it) }
                     statement.thenBranch?.let { processStatement(it) }
                 }
+
                 is PsiBlockStatement -> {
                     processBlock(statement.codeBlock)
                 }
+
                 is PsiTryStatement -> {
                     statement.tryBlock?.let { processBlock(it) }
                     for (catchBlock in statement.catchBlocks) {
                         processBlock(catchBlock)
                     }
                 }
+
                 is PsiForStatement -> {
                     statement.initialization?.let { processStatement(it) }
                     statement.update?.let { processStatement(it) }
                     statement.body?.let { processStatement(it) }
                 }
+
                 is PsiForeachStatement -> {
                     statement.iteratedValue?.let { processExpression(it) }
                     statement.body?.let { processStatement(it) }
                 }
+
                 is PsiWhileStatement -> statement.body?.let { processStatement(it) }
                 is PsiDoWhileStatement -> statement.body?.let { processStatement(it) }
 
@@ -959,15 +958,18 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         processElement(declaredElement)
                     }
                 }
+
                 is PsiReturnStatement -> {
                     val returnValue = statement.returnValue
                     if (returnValue != null) {
                         returnVal = findComplexResult(returnVal, processExpression(returnValue))
                     }
                 }
+
                 is PsiThrowStatement -> {
                     //ignore
                 }
+
                 else -> {
                     methodReturnInferHelper.logger.debug("no matched statement:${statement::class} - ${statement.text}")
                 }
@@ -1028,9 +1030,11 @@ class DefaultMethodInferHelper : MethodInferHelper {
                     }
                     return variable
                 }
+
                 is PsiEnumConstant -> {
                     return resolveEnumFields(psiElement)
                 }
+
                 is PsiField -> {
                     if (methodReturnInferHelper.jvmClassHelper!!.isStaticFinal(psiElement)) {
                         return processStaticField(psiElement)
@@ -1046,32 +1050,40 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         DirectVariable { methodReturnInferHelper.getSimpleFields(psiElement.type, psiElement) }
                     }
                 }
+
                 is PsiParameter -> {
                     return psiElement.name?.let { findVariable(it) }
                 }
+
                 is PsiAnonymousClass -> {
                     processAnonymousClass(psiElement)
                     return null
                 }
+
                 is PsiClassInitializer -> {
                     processBlock(psiElement.body)
                 }
+
                 is PsiKeyword -> {
                     //todo:any keyword return null??
                     return null
                 }
+
                 is PsiReferenceParameterList -> {
                     //todo:what does PsiReferenceParameterList mean
                     return null
                 }
+
                 is PsiWhiteSpace -> {
                     //ignore white space
                     return null
                 }
+
                 is PsiJavaCodeReferenceElement -> {
                     //todo:what does PsiJavaCodeReferenceElement mean
                     return null
                 }
+
                 is PsiExpressionList -> {
                     val list = ArrayList<Any?>()
                     for (expression in psiElement.expressions) {
@@ -1079,6 +1091,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                     }
                     return list
                 }
+
                 is PsiArrayAccessExpression -> {
                     val array = processExpression(psiElement.arrayExpression) ?: return null
                     if (array is Array<*> && array.size > 0) {
@@ -1090,9 +1103,11 @@ class DefaultMethodInferHelper : MethodInferHelper {
                     }
 
                 }
+
                 is PsiLambdaExpression -> {
                     return psiElement.body?.let { processElement(it) }
                 }
+
                 else -> {
                     //ignore
 //                    methodReturnInferHelper.logger.debug("no matched ele ${psiElement::class.qualifiedName}:${psiElement.text}")
@@ -1122,6 +1137,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
 
                     return le
                 }
+
                 is PsiNewExpression -> return processNewExpression(psiExpression)
                 is PsiCallExpression -> {
 
@@ -1146,6 +1162,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                     }
                     return ret
                 }
+
                 is PsiReferenceExpression -> {
 
                     val qualifierExpression = psiExpression.qualifierExpression
@@ -1161,6 +1178,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                     val resolve = psiExpression.resolve()
                     if (resolve != null) return processElement(resolve, qualifier)
                 }
+
                 is PsiThisExpression -> return getThis()
                 is PsiLiteralExpression -> return psiExpression.value
                 is PsiBinaryExpression -> return processBinaryExpression(psiExpression)
@@ -1206,6 +1224,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         }
                     }
                 }
+
                 JavaTokenType.MINUS -> {
                     val lOperand = valueOf(processExpression(psiExpression.lOperand)) ?: return null
                     val rOperand = psiExpression.rOperand?.let { valueOf(processExpression(it)) }
@@ -1221,6 +1240,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         }
                     }
                 }
+
                 JavaTokenType.ASTERISK -> {
                     val lOperand = valueOf(processExpression(psiExpression.lOperand)) ?: return null
                     val rOperand = psiExpression.rOperand?.let { valueOf(processExpression(it)) }
@@ -1236,6 +1256,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         }
                     }
                 }
+
                 JavaTokenType.DIV -> {
                     val lOperand = valueOf(processExpression(psiExpression.lOperand)) ?: return null
                     val rOperand = psiExpression.rOperand?.let { valueOf(processExpression(it)) }
@@ -1251,6 +1272,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         }
                     }
                 }
+
                 JavaTokenType.AND -> {
                     val lOperand = valueOf(processExpression(psiExpression.lOperand)) ?: return null
                     val rOperand = psiExpression.rOperand?.let { valueOf(processExpression(it)) }
@@ -1263,6 +1285,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         }
                     }
                 }
+
                 JavaTokenType.OR -> {
                     val lOperand = valueOf(processExpression(psiExpression.lOperand)) ?: return null
                     val rOperand = psiExpression.rOperand?.let { valueOf(processExpression(it)) }
@@ -1275,6 +1298,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         }
                     }
                 }
+
                 JavaTokenType.NE, JavaTokenType.LE, JavaTokenType.LE, JavaTokenType.LT, JavaTokenType.GE, JavaTokenType.GT -> return true
                 else -> {
                     return valueOf(processExpression(psiExpression.lOperand))
@@ -1299,6 +1323,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         }
                     }
                 }
+
                 JavaTokenType.EQEQ, JavaTokenType.NE -> {
                     return true
                 }
@@ -1424,7 +1449,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
         private val psiMethod: PsiMethod,
         caller: Any? = null,
         args: Array<Any?>?,
-        methodReturnInferHelper: DefaultMethodInferHelper
+        methodReturnInferHelper: DefaultMethodInferHelper,
     ) : AbstractMethodReturnInfer(caller, args, methodReturnInferHelper) {
 
         override fun infer(): Any? {
@@ -1500,7 +1525,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
      */
     open inner class QuicklyMethodReturnInfer(
         private val psiMethod: PsiMethod,
-        methodReturnInferHelper: DefaultMethodInferHelper
+        methodReturnInferHelper: DefaultMethodInferHelper,
     ) : AbstractMethodReturnInfer(null, null, methodReturnInferHelper) {
 
         override fun infer(): Any? {
@@ -1524,27 +1549,32 @@ class DefaultMethodInferHelper : MethodInferHelper {
                     statement.elseBranch?.let { processStatement(it) }
                     statement.thenBranch?.let { processStatement(it) }
                 }
+
                 is PsiBlockStatement -> {
                     processBlock(statement.codeBlock)
                 }
+
                 is PsiTryStatement -> {
                     statement.tryBlock?.let { processBlock(it) }
                     for (catchBlock in statement.catchBlocks) {
                         processBlock(catchBlock)
                     }
                 }
+
                 is PsiExpressionStatement -> processExpression(statement.expression)
                 is PsiDeclarationStatement -> {
                     for (declaredElement in statement.declaredElements) {
                         processElement(declaredElement)
                     }
                 }
+
                 is PsiReturnStatement -> {
                     val returnValue = statement.returnValue
                     if (returnValue != null) {
                         returnVal = findComplexResult(returnVal, processExpression(returnValue))
                     }
                 }
+
                 else -> {
                     throw IllegalArgumentException("Quickly Infer Failed")
                 }
@@ -1564,13 +1594,16 @@ class DefaultMethodInferHelper : MethodInferHelper {
                     }
                     throw IllegalArgumentException("Quickly Infer Failed")
                 }
+
                 is PsiAnonymousClass -> {
                     processAnonymousClass(psiElement)
                     return null
                 }
+
                 is PsiClassInitializer -> {
                     return processBlock(psiElement.body)
                 }
+
                 else -> {
                     throw IllegalArgumentException("Quickly Infer Failed")
                 }
@@ -1589,6 +1622,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
                         throw IllegalArgumentException("Quickly Infer Failed")
                     }
                 }
+
                 is PsiReferenceExpression -> {
                     val resolve = psiExpression.resolve()
                     if (resolve != null) return processElement(resolve)
@@ -1598,6 +1632,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
 //                    }
                     throw IllegalArgumentException("Quickly Infer Failed")
                 }
+
                 is PsiLiteralExpression -> return psiExpression.value
                 else -> {
                     throw IllegalArgumentException("Quickly Infer Failed")
@@ -1617,7 +1652,7 @@ class DefaultMethodInferHelper : MethodInferHelper {
     inner class NewExpressionInfer(
         private val psiNewExpression: PsiNewExpression,
         args: Array<Any?>?,
-        methodReturnInferHelper: DefaultMethodInferHelper
+        methodReturnInferHelper: DefaultMethodInferHelper,
     ) : AbstractMethodReturnInfer(null, args, methodReturnInferHelper) {
 
         override fun infer(): Any? {
@@ -1674,19 +1709,3 @@ class DefaultMethodInferHelper : MethodInferHelper {
 }
 
 private typealias LazyAction = () -> Unit
-
-class DisposableLazyAction(val delegate: LazyAction) : LazyAction {
-    private var disposed = false
-
-    override fun invoke() {
-        if (disposed) return
-        disposed = true
-        delegate()
-    }
-}
-
-fun LazyAction.disposable(): DisposableLazyAction {
-    return DisposableLazyAction(this)
-}
-
-private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(DefaultMethodInferHelper::class.java)

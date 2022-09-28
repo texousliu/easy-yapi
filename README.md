@@ -20,8 +20,8 @@
 |   |  默认支持  |  额外(配置)支持  |
 | ------------ | ------------ | ------------ |
 | 语言 | java, kotlin | scala |
-| web | [spring](https://spring.io/), [feign](https://spring.io/projects/spring-cloud-openfeign), [quarkus](https://quarkus.io/) | [dubbo](https://dubbo.apache.org) |
-| 导出到 | [Postman](https://easyyapi.com/documents/export2postman.html), [Yapi](https://easyyapi.com/documents/export2yapi.html), [Markdown](https://easyyapi.com/documents/export2markdown.html) | - |
+| web | [spring](https://spring.io/), [feign](https://spring.io/projects/spring-cloud-openfeign), [jaxrs](https://www.oracle.com/technical-resources/articles/java/jax-rs.html) ([quarkus](https://quarkus.io/) or [jersey](https://eclipse-ee4j.github.io/jersey/)) | [dubbo](https://dubbo.apache.org) |
+| 导出到 | [Postman](https://easyyapi.com/documents/export2postman.html), [Yapi](https://easyyapi.com/documents/export2yapi.html), [Markdown](https://easyyapi.com/documents/export2markdown.html) , [Curl](https://curl.se/) | - |
 | 常用框架 | javax.validation, Jackson, Gson |  [swagger](https://swagger.io/) |
 
 ## 导航
@@ -32,23 +32,12 @@
 * [配置](https://easyyapi.com/setting/index.html)
 * [demo](https://easyyapi.com/demo/index.html)
 
-## 贡献
+## Contributing
 
-***您可以通过以下途径帮助easy-yapi变得更好***
-  
-* 讨论 [新的功能](https://github.com/tangcent/easy-yapi/issues?q=label%3Aenhancement) or提交 [BUG](https://github.com/tangcent/easy-yapi/issues?q=label%3Abug): [Issues](https://github.com/tangcent/easy-yapi/issues)
+You can propose a feature request opening an issue or a pull request.
 
-* 开发 [新的功能](https://github.com/tangcent/easy-yapi/pulls?q=+label%3Aenhancement) or修复 [BUG](https://github.com/tangcent/easy-yapi/pulls?q=label%3Abug): [PR](https://github.com/tangcent/easy-yapi/pulls)
+Here is a list of contributors:
 
-* 完善测试 [codecov](https://codecov.io/gh/tangcent/easy-yapi)
-
-* 帮助维护文档: [easyyapi.com](https://github.com/easyyapi/easyyapi.github.io/tree/dev)
-  请将您的PR提交到dev分支
-  
-* 维护推荐配置: [.recommend.easy.api.config](https://github.com/tangcent/easy-yapi/blob/master/idea-plugin/src/main/resources/.recommend.easy.api.config)
-
-* 丰富支持的三方配置: [third](https://github.com/tangcent/easy-yapi/tree/master/third)
-
-* 丰富demo: [spring-demo](https://github.com/Earth-1610/spring-demo) | [web-demo](https://github.com/Earth-1610/web-demo)
-
-* 修复IDE兼容问题: [intellij-kotlin](https://github.com/Earth-1610/intellij-kotlin/pulls?q=label%3Acompatibility+)
+<a href="https://github.com/tangcent/easy-yapi/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=tangcent/easy-yapi" />
+</a>

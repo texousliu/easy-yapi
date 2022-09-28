@@ -1,12 +1,16 @@
 package com.itangcent.idea.utils
 
 import com.google.inject.Inject
+import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiField
 import com.itangcent.common.constant.Attrs
+import com.itangcent.common.logger.Log
+import com.itangcent.common.logger.traceWarn
 import com.itangcent.common.utils.*
 import com.itangcent.idea.plugin.api.export.AdditionalField
 import com.itangcent.idea.plugin.api.export.core.ClassExportRuleKeys
+import com.itangcent.idea.plugin.settings.EventRecords
 import com.itangcent.intellij.config.rule.computer
 import com.itangcent.intellij.extend.toPrettyString
 import com.itangcent.intellij.jvm.PsiExpressionResolver
@@ -14,8 +18,9 @@ import com.itangcent.intellij.jvm.duck.DuckType
 import com.itangcent.intellij.jvm.element.ExplicitClass
 import com.itangcent.intellij.jvm.element.ExplicitElement
 import com.itangcent.intellij.jvm.element.ExplicitField
-import com.itangcent.intellij.psi.unwrap
-import com.itangcent.intellij.psi.unwrapped
+import com.itangcent.intellij.psi.ObjectHolder
+import com.itangcent.intellij.psi.ResolveContext
+import com.itangcent.intellij.psi.getOrResolve
 
 /**
  * support rules:
@@ -32,8 +37,8 @@ open class CustomizedPsiClassHelper : ContextualPsiClassHelper() {
         fieldType: DuckType,
         fieldOrMethod: ExplicitElement<*>,
         resourcePsiClass: ExplicitClass,
-        option: Int,
-        kv: KV<String, Any?>
+        resolveContext: ResolveContext,
+        kv: KV<String, Any?>,
     ) {
         //compute `field.required`
         ruleComputer.computer(ClassExportRuleKeys.FIELD_REQUIRED, fieldOrMethod)?.let { required ->
@@ -52,16 +57,16 @@ open class CustomizedPsiClassHelper : ContextualPsiClassHelper() {
             populateFieldValue(fieldName, fieldType, kv, defaultValue)
         }
 
-        super.afterParseFieldOrMethod(fieldName, fieldType, fieldOrMethod, resourcePsiClass, option, kv)
+        super.afterParseFieldOrMethod(fieldName, fieldType, fieldOrMethod, resourcePsiClass, resolveContext, kv)
     }
 
     override fun resolveAdditionalField(
         additionalField: AdditionalField,
         context: PsiElement,
-        option: Int,
-        kv: KV<String, Any?>
+        resolveContext: ResolveContext,
+        kv: KV<String, Any?>,
     ) {
-        super.resolveAdditionalField(additionalField, context, option, kv)
+        super.resolveAdditionalField(additionalField, context, resolveContext, kv)
         val fieldName = additionalField.name!!
         kv.sub(Attrs.REQUIRED_ATTR)[fieldName] = additionalField.required
         kv.sub(Attrs.DEFAULT_VALUE_ATTR)[fieldName] = additionalField.defaultValue
@@ -71,14 +76,20 @@ open class CustomizedPsiClassHelper : ContextualPsiClassHelper() {
         val obj = try {
             GsonExUtils.fromJson<Any>(valueText)
         } catch (e: Exception) {
-            LOG.warn("failed parse json:\n$valueText\n", e)
+            LOG.traceWarn("failed parse json:\n$valueText\n", e)
             return
         }
-        if (isOriginal(obj)) {
+        if (obj.isOriginal()) {
             return
         }
-        val oldValue = kv[fieldName].unwrap()
-        if (isOriginal(oldValue)) {
+        var oldValue = kv[fieldName]
+        if (oldValue is ObjectHolder) {
+            oldValue = oldValue.getOrResolve()
+        }
+        if (oldValue == obj) {
+            return
+        }
+        if (oldValue.isOriginal()) {
             kv[fieldName] = obj
         } else {
             kv[fieldName] = oldValue.copy()
@@ -86,42 +97,16 @@ open class CustomizedPsiClassHelper : ContextualPsiClassHelper() {
         }
     }
 
-    /**
-     * check if the object is original
-     * like:
-     * default primary: 0, 0.0
-     * default blank string: ""
-     * array with original: [0],[0.0],[""]
-     * list with original: [0],[0.0],[""]
-     * map with original: {"key":0}
-     */
-    private fun isOriginal(obj: Any?): Boolean {
-        when (obj) {
-            null -> {
-                return true
-            }
-            is Array<*> -> {
-                return obj.size == 0 || (obj.size == 1 && isOriginal(obj[0]))
-            }
-            is Collection<*> -> {
-                return obj.size == 0 || (obj.size == 1 && isOriginal(obj.first()))
-            }
-            is Map<*, *> -> {
-                return obj.size == 0 || (obj.size == 1 && obj.entries.first().let {
-                    (it.key == "key" || isOriginal(it.key)) && isOriginal(it.value)
-                })
-            }
-            is Boolean -> {
-                return obj
-            }
-            is Number -> {
-                return obj.toDouble() == 0.0
-            }
-            is String -> {
-                return obj.isBlank()
-            }
-            else -> return false
-        }
+    @Suppress("UNCHECKED_CAST")
+    override fun resolveEnumOrStatic(
+        context: PsiElement,
+        cls: PsiClass?,
+        property: String?,
+        defaultPropertyName: String,
+        valueTypeHandle: ((DuckType) -> Unit)?,
+    ): java.util.ArrayList<java.util.HashMap<String, Any?>>? {
+        EventRecords.record(EventRecords.ENUM_RESOLVE)
+        return super.resolveEnumOrStatic(context, cls, property, defaultPropertyName, valueTypeHandle)
     }
 
     override fun ignoreField(psiField: PsiField): Boolean {
@@ -130,6 +115,6 @@ open class CustomizedPsiClassHelper : ContextualPsiClassHelper() {
         }
         return super.ignoreField(psiField)
     }
-}
 
-private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(CustomizedPsiClassHelper::class.java)
+    companion object : Log()
+}

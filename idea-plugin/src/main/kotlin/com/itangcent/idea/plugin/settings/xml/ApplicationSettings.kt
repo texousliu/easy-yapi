@@ -3,6 +3,7 @@ package com.itangcent.idea.plugin.settings.xml
 import com.itangcent.idea.plugin.settings.MarkdownFormatType
 import com.itangcent.idea.plugin.settings.PostmanJson5FormatType
 import com.itangcent.idea.plugin.settings.Settings
+import com.itangcent.idea.plugin.settings.YapiExportMode
 import com.itangcent.idea.plugin.settings.helper.RecommendConfigLoader
 import com.itangcent.idea.utils.Charsets
 
@@ -10,7 +11,8 @@ interface ApplicationSettingsSupport {
     var methodDocEnable: Boolean
     var genericEnable: Boolean
     var feignEnable: Boolean
-    var quarkusEnable: Boolean
+    var jaxrsEnable: Boolean
+    var actuatorEnable: Boolean
     var pullNewestDataBefore: Boolean
     var postmanToken: String?
     var wrapCollection: Boolean
@@ -22,11 +24,14 @@ interface ApplicationSettingsSupport {
     var readSetter: Boolean
     var inferEnable: Boolean
     var inferMaxDeep: Int
+    var selectedOnly: Boolean
+
     var yapiServer: String?
     var yapiTokens: String?
     var enableUrlTemplating: Boolean
     var switchNotice: Boolean
     var loginMode: Boolean
+    var yapiExportMode: String
     var yapiReqBodyJson5: Boolean
     var yapiResBodyJson5: Boolean
 
@@ -53,18 +58,21 @@ interface ApplicationSettingsSupport {
         newSetting.methodDocEnable = this.methodDocEnable
         newSetting.genericEnable = this.genericEnable
         newSetting.feignEnable = this.feignEnable
-        newSetting.quarkusEnable = this.quarkusEnable
+        newSetting.jaxrsEnable = this.jaxrsEnable
+        newSetting.actuatorEnable = this.actuatorEnable
         newSetting.queryExpanded = this.queryExpanded
         newSetting.formExpanded = this.formExpanded
         newSetting.readGetter = this.readGetter
         newSetting.readSetter = this.readSetter
         newSetting.inferEnable = this.inferEnable
         newSetting.inferMaxDeep = this.inferMaxDeep
+        newSetting.selectedOnly = this.selectedOnly
         newSetting.yapiServer = this.yapiServer
         newSetting.yapiTokens = this.yapiTokens
         newSetting.enableUrlTemplating = this.enableUrlTemplating
         newSetting.switchNotice = this.switchNotice
         newSetting.loginMode = this.loginMode
+        newSetting.yapiExportMode = this.yapiExportMode
         newSetting.yapiReqBodyJson5 = this.yapiReqBodyJson5
         newSetting.yapiResBodyJson5 = this.yapiResBodyJson5
         newSetting.httpTimeOut = this.httpTimeOut
@@ -88,7 +96,9 @@ class ApplicationSettings : ApplicationSettingsSupport {
 
     override var feignEnable: Boolean = false
 
-    override var quarkusEnable: Boolean = true
+    override var jaxrsEnable: Boolean = true
+
+    override var actuatorEnable: Boolean = false
 
     //postman
 
@@ -116,6 +126,8 @@ class ApplicationSettings : ApplicationSettingsSupport {
 
     override var inferMaxDeep: Int = Settings.DEFAULT_INFER_MAX_DEEP
 
+    override var selectedOnly: Boolean = false
+
     //endregion
 
     //yapi
@@ -129,6 +141,8 @@ class ApplicationSettings : ApplicationSettingsSupport {
     override var switchNotice: Boolean = true
 
     override var loginMode: Boolean = false
+
+    override var yapiExportMode: String = YapiExportMode.ALWAYS_UPDATE.name
 
     override var yapiReqBodyJson5: Boolean = false
 

@@ -3,17 +3,30 @@ package com.itangcent.idea.plugin.api
 import com.google.inject.Inject
 import com.google.inject.Singleton
 import com.intellij.psi.*
+import com.itangcent.common.logger.Log
+import com.itangcent.common.model.Doc
 import com.itangcent.common.utils.KV
 import com.itangcent.common.utils.notNullOrBlank
 import com.itangcent.common.utils.notNullOrEmpty
+import com.itangcent.common.utils.stream
 import com.itangcent.idea.plugin.api.export.core.ClassExportRuleKeys
+import com.itangcent.idea.plugin.api.export.core.ClassExporter
 import com.itangcent.idea.plugin.api.export.core.LinkResolver
+import com.itangcent.idea.swing.MessagesHelper
 import com.itangcent.intellij.config.rule.RuleComputer
 import com.itangcent.intellij.config.rule.computer
+import com.itangcent.intellij.context.ActionContext
+import com.itangcent.intellij.extend.withBoundary
 import com.itangcent.intellij.jvm.*
 import com.itangcent.intellij.jvm.element.ExplicitElement
 import com.itangcent.intellij.jvm.element.ExplicitMethod
+import com.itangcent.intellij.logger.Logger
+import com.itangcent.intellij.psi.SelectedHelper
+import com.itangcent.intellij.util.FileType
 import java.util.*
+import java.util.concurrent.BlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
+import kotlin.streams.toList
 
 @Singleton
 open class ClassApiExporterHelper {
@@ -39,14 +52,31 @@ open class ClassApiExporterHelper {
     @Inject
     protected val duckTypeHelper: DuckTypeHelper? = null
 
+    @Inject
+    protected lateinit var actionContext: ActionContext
+
+    @Inject
+    protected lateinit var logger: Logger
+
+    @Inject
+    protected val classExporter: ClassExporter? = null
+
+    @Inject
+    protected lateinit var messagesHelper: MessagesHelper
+
+    companion object : Log()
+
     fun extractParamComment(psiMethod: PsiMethod): KV<String, Any>? {
         val subTagMap = docHelper!!.getSubTagMapOfDocComment(psiMethod, "param")
+        if (subTagMap.isEmpty()) {
+            return null
+        }
 
-        var methodParamComment: KV<String, Any>? = null
+        val methodParamComment: KV<String, Any> = KV.create()
+        val parameters = psiMethod.parameterList.parameters
         subTagMap.entries.forEach { entry ->
             val name: String = entry.key
             val value: String? = entry.value
-            if (methodParamComment == null) methodParamComment = KV.create()
             if (value.notNullOrBlank()) {
 
                 val options: ArrayList<HashMap<String, Any?>> = ArrayList()
@@ -54,8 +84,12 @@ open class ClassApiExporterHelper {
 
                     override fun linkToPsiElement(plainText: String, linkTo: Any?): String? {
 
-                        psiClassHelper!!.resolveEnumOrStatic(plainText, psiMethod, name)
-                                ?.let { options.addAll(it) }
+                        psiClassHelper!!.resolveEnumOrStatic(
+                            plainText,
+                            parameters.firstOrNull { it.name == name } ?: psiMethod,
+                            name
+                        )
+                            ?.let { options.addAll(it) }
 
                         return super.linkToPsiElement(plainText, linkTo)
                     }
@@ -83,9 +117,9 @@ open class ClassApiExporterHelper {
                     }
                 })
 
-                methodParamComment!![name] = comment ?: ""
+                methodParamComment[name] = comment ?: ""
                 if (options.notNullOrEmpty()) {
-                    methodParamComment!!["$name@options"] = options
+                    methodParamComment["$name@options"] = options
                 }
             }
 
@@ -94,15 +128,36 @@ open class ClassApiExporterHelper {
         return methodParamComment
     }
 
-    fun foreachMethod(cls: PsiClass, handle: (ExplicitMethod) -> Unit) {
-        duckTypeHelper!!.explicit(cls)
+    /**
+     * @param handle the handle will be called in ReadUI
+     */
+    fun foreachMethod(
+        cls: PsiClass, handle: (ExplicitMethod) -> Unit,
+    ) {
+        actionContext.runInReadUI {
+            val methods = duckTypeHelper!!.explicit(cls)
                 .methods()
                 .stream()
                 .filter { !jvmClassHelper!!.isBasicMethod(it.psi().name) }
                 .filter { !it.psi().hasModifierProperty("static") }
                 .filter { !it.psi().isConstructor }
                 .filter { !shouldIgnore(it) }
-                .forEach(handle)
+                .toList()
+            actionContext.runAsync {
+                val boundary = actionContext.createBoundary()
+                try {
+                    for (method in methods) {
+                        actionContext.callInReadUI {
+                            handle(method)
+                        }
+                        boundary.waitComplete(false)
+                        Thread.sleep(100)
+                    }
+                } finally {
+                    boundary.remove()
+                }
+            }
+        }
     }
 
     protected open fun shouldIgnore(explicitElement: ExplicitElement<*>): Boolean {
@@ -113,4 +168,76 @@ open class ClassApiExporterHelper {
         return ruleComputer!!.computer(ClassExportRuleKeys.IGNORE, psiElement) ?: false
     }
 
+    fun foreachPsiMethod(cls: PsiClass, handle: (PsiMethod) -> Unit) {
+        actionContext.runInReadUI {
+            jvmClassHelper!!.getAllMethods(cls)
+                .stream()
+                .filter { !jvmClassHelper.isBasicMethod(it.name) }
+                .filter { !it.hasModifierProperty("static") }
+                .filter { !it.isConstructor }
+                .filter { !shouldIgnore(it) }
+                .forEach(handle)
+        }
+    }
+
+    fun export(): List<Doc> {
+        val docs: MutableList<Doc> = Collections.synchronizedList(java.util.ArrayList())
+        export { docs.add(it) }
+        return docs
+    }
+
+    fun export(handle: (Doc) -> Unit) {
+        logger.info("Start find apis...")
+        val psiClassQueue: BlockingQueue<PsiClass> = LinkedBlockingQueue()
+
+        val boundary = actionContext.createBoundary()
+
+        actionContext.runAsync {
+            SelectedHelper.Builder()
+//                .dirFilter { dir, callBack ->
+//                    try {
+//                        val yes = messagesHelper.showYesNoDialog(
+//                            "Export the api in directory [${ActionUtils.findCurrentPath(dir)}]?",
+//                            "Confirm",
+//                            Messages.getQuestionIcon()
+//                        )
+//                        if (yes == Messages.YES) {
+//                            callBack(true)
+//                        } else {
+//                            logger.debug("Cancel the operation export api from [${
+//                                ActionUtils.findCurrentPath(dir)
+//                            }]!")
+//                            callBack(false)
+//                        }
+//                    } catch (e: Exception) {
+//                        callBack(false)
+//                    }
+//                }
+                .fileFilter { file -> FileType.acceptable(file.name) }
+                .classHandle {
+                    psiClassQueue.add(it)
+                }
+                .traversal()
+        }
+
+        while (true) {
+            val psiClass = psiClassQueue.poll()
+            if (psiClass == null) {
+                if (boundary.waitComplete(100, false)
+                    && psiClassQueue.isEmpty()
+                ) {
+                    boundary.remove()
+                    boundary.close()
+                    break
+                }
+            } else {
+                val classQualifiedName = actionContext.callInReadUI { psiClass.qualifiedName }
+                LOG.info("wait api parsing... $classQualifiedName")
+                actionContext.withBoundary {
+                    classExporter!!.export(psiClass) { handle(it) }
+                }
+                LOG.info("api parse $classQualifiedName completed.")
+            }
+        }
+    }
 }

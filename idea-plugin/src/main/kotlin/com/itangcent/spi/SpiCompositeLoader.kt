@@ -14,7 +14,6 @@ import kotlin.reflect.full.findAnnotation
 
 object SpiCompositeLoader {
 
-    @Suppress("UNCHECKED_CAST")
     inline fun <reified S : Any> loadComposite(): S {
         val cls = S::class
         val loadServices = load<S>(ActionContext.getContext()!!)
@@ -39,10 +38,18 @@ object SpiCompositeLoader {
                 conditionEvaluator.matches(actionContext, it)
             }
 
+        if (matchedClasses.isEmpty()) {
+            return emptyArray()
+        }
+
         //support @Exclusion
         val exclusions = collectExclusions(matchedClasses)
         if (exclusions.isNotEmpty()) {
             matchedClasses = matchedClasses.filter { !exclusions.contains(it) }
+        }
+
+        if (matchedClasses.isEmpty()) {
+            return emptyArray()
         }
 
         LOG.info("matched ${T::class}:${matchedClasses}")

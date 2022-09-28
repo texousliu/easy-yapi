@@ -19,6 +19,7 @@ import com.itangcent.intellij.logger.Logger
 import com.itangcent.mock.*
 import com.itangcent.test.ResultLoader
 import com.itangcent.test.TimeZoneKit.STANDARD_TIME
+import com.itangcent.test.assertLinesEqualsIgnoreOrder
 import com.itangcent.test.mock
 import com.itangcent.test.workAt
 import com.itangcent.testFramework.PluginContextLightCodeInsightFixtureTestCase
@@ -113,7 +114,7 @@ internal abstract class YapiApiExporterTest : PluginContextLightCodeInsightFixtu
                 }))
             }
             builder.mock<YapiApiHelper> {
-                this.on { it.findCat(eq("token111111"), eq("apis about user")) }
+                this.on { it.findCart(eq("token111111"), eq("apis about user")) }
                     .thenReturn(null, "111111")
                 this.on { it.getProjectIdByToken(eq("token111111")) }
                     .thenReturn("12345")
@@ -140,7 +141,7 @@ internal abstract class YapiApiExporterTest : PluginContextLightCodeInsightFixtu
                 ResultLoader.load(),
                 GsonUtils.prettyJson(apis)
             )
-            assertEquals(
+            assertLinesEqualsIgnoreOrder(
                 ResultLoader.load("log"),
                 LoggerCollector.getLog().toUnixString()
             )
@@ -165,9 +166,9 @@ internal abstract class YapiApiExporterTest : PluginContextLightCodeInsightFixtu
                 }))
             }
             builder.mock<YapiApiHelper> {
-                this.on { it.findCat(eq("token111111"), eq("apis about user")) }
+                this.on { it.findCart(eq("token111111"), eq("apis about user")) }
                     .thenReturn("111111")
-                this.on { it.findCat(eq("token111111"), eq("test apis")) }
+                this.on { it.findCart(eq("token111111"), eq("test apis")) }
                     .thenReturn("222222")
                 this.on { it.getProjectIdByToken(eq("token111111")) }
                     .thenReturn("12345")
@@ -188,11 +189,12 @@ internal abstract class YapiApiExporterTest : PluginContextLightCodeInsightFixtu
         fun testExportSpring() {
             yapiApiExporter.export()
             actionContext.waitComplete()
+            apis.sortBy { it.toString() }
             assertEquals(
                 ResultLoader.load(),
                 GsonUtils.prettyJson(apis)
             )
-            assertEquals(
+            assertLinesEqualsIgnoreOrder(
                 ResultLoader.load("log"),
                 LoggerCollector.getLog().toUnixString()
             )
@@ -213,7 +215,7 @@ internal abstract class YapiApiExporterTest : PluginContextLightCodeInsightFixtu
                 }))
             }
             builder.mock<YapiApiHelper> {
-                this.on { it.findCat(eq("token111111"), eq("rpc apis about user")) }
+                this.on { it.findCart(eq("token111111"), eq("rpc apis about user")) }
                     .thenReturn("333333")
                 this.on { it.getProjectIdByToken(eq("token111111")) }
                     .thenReturn("12345")

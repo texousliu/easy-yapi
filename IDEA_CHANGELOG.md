@@ -1,3 +1,99 @@
+* 2.4.6
+
+	* amend: use :Log() instead of define [(#837)](https://github.com/tangcent/easy-yapi/pull/837)
+
+	* fix: parse FeignClient#path [(#835)](https://github.com/tangcent/easy-yapi/pull/835)
+
+	* feat: support export apis from actuator [(#834)](https://github.com/tangcent/easy-yapi/pull/834)
+
+	* fix: convert java.math.BigInteger to java.lang.Long [(#828)](https://github.com/tangcent/easy-yapi/pull/828)
+
+	* test: DefaultYapiApiHelperTest [(#824)](https://github.com/tangcent/easy-yapi/pull/824)
+
+* 2.4.5
+
+	* fix: set resolveMulti to first in javax.validation.config [(#821)](https://github.com/tangcent/easy-yapi/pull/821)
+
+	* feat: add an option to update or skip existed apis in yapi [(#817)](https://github.com/tangcent/easy-yapi/pull/817)
+
+	* feat: asks how to convert enum on the first use [(#813)](https://github.com/tangcent/easy-yapi/pull/813)
+
+* 2.4.4
+
+	* fix: resolve desc of return type [(#807)](https://github.com/tangcent/easy-yapi/pull/807)
+
+	* fix: support parse apis in several modules to one collection [(#806)](https://github.com/tangcent/easy-yapi/pull/806)
+
+* 2.4.3
+
+	* feat: new setting  `Postman > build example` [(#802)](https://github.com/tangcent/easy-yapi/pull/802)
+
+* 2.4.2
+
+	* feat: enum auto select field by type [(#797)](https://github.com/tangcent/easy-yapi/pull/797)
+
+	* fix: resolve doc of fields for param annotated with @BeanParam [(#796)](https://github.com/tangcent/easy-yapi/pull/796)
+
+	* chore: remove DataEventCollector.getData(DataKey) [(#792)](https://github.com/tangcent/easy-yapi/pull/792)
+
+* 2.4.1
+
+	* feat: resolve suspend function in kotlin [(#790)](https://github.com/tangcent/easy-yapi/pull/790)
+
+* 2.4.0
+
+	* feat: get resource with timeout [(#786)](https://github.com/tangcent/easy-yapi/pull/786)
+
+	* chore: remove usages of KitUtils.safe [(#785)](https://github.com/tangcent/easy-yapi/pull/785)
+
+	* feat: support new setting 'export selected method only' [(#783)](https://github.com/tangcent/easy-yapi/pull/783)
+
+* 2.3.9
+
+	* fix: not use '0' as example [(#771)](https://github.com/tangcent/easy-yapi/pull/771)
+
+	* fix: fix resize of ApiCallDialog [(#770)](https://github.com/tangcent/easy-yapi/pull/770)
+
+	* fix: fix  rule `field.default.value` [(#765)](https://github.com/tangcent/easy-yapi/pull/765)
+
+	* feat: not require confirmation to export apis from directory [(#766)](https://github.com/tangcent/easy-yapi/pull/766)
+
+* 2.3.8
+
+	* feat: wrap script result [(#762)](https://github.com/tangcent/easy-yapi/pull/762)
+
+	* fix: refactor the thread model [(#760)](https://github.com/tangcent/easy-yapi/pull/760)
+
+	* fix: interval sleep during parsing [(#757)](https://github.com/tangcent/easy-yapi/pull/757)
+
+* 2.3.7
+
+	* chore: update docs [(#752)](https://github.com/tangcent/easy-yapi/pull/752)
+
+	* feat: rename module quarkus to jaxrs [(#751)](https://github.com/tangcent/easy-yapi/pull/751)
+
+* 2.3.6
+
+	* chore: add Fastjson support [(#745)](https://github.com/tangcent/easy-yapi/pull/745)
+
+	* feat: init recommend config even if no module be switched [(#744)](https://github.com/tangcent/easy-yapi/pull/744)
+
+	* fix: set `readTimeout` for read resource by url [(#743)](https://github.com/tangcent/easy-yapi/pull/743)
+
+	* feat: new method for rule context `class` [(#739)](https://github.com/tangcent/easy-yapi/pull/739)
+
+	* feat: resolve RequestMapping from interfaces [(#738)](https://github.com/tangcent/easy-yapi/pull/738)
+
+* 2.3.5
+
+	* chore: update version of intellij-kotlin to 1.1.7 [(#731)](https://github.com/tangcent/easy-yapi/pull/731)
+
+	* fix: fix Writer [(#726)](https://github.com/tangcent/easy-yapi/pull/726)
+
+	* feat: provide rules to customize tables in markdown [(#724)](https://github.com/tangcent/easy-yapi/pull/724)
+
+	* chore: update markdown.cn.config [(#721)](https://github.com/tangcent/easy-yapi/pull/721)
+
 * 2.3.4
 
 	* test: add test case for DataEventCollector [(#719)](https://github.com/tangcent/easy-yapi/pull/719)

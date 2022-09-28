@@ -3,7 +3,7 @@ package com.itangcent.idea.plugin.settings.helper
 import com.google.inject.Inject
 import com.google.inject.Singleton
 import com.itangcent.idea.plugin.settings.SettingBinder
-import com.itangcent.intellij.psi.JsonOption
+import com.itangcent.intellij.jvm.JsonOption
 
 @Singleton
 class IntelligentSettingsHelper {
@@ -33,6 +33,10 @@ class IntelligentSettingsHelper {
 
     fun inferMaxDeep(): Int {
         return settingBinder.read().inferMaxDeep
+    }
+
+    fun selectedOnly(): Boolean {
+        return settingBinder.read().selectedOnly
     }
 
     fun jsonOptionForInput(jsonOption: Int): Int {

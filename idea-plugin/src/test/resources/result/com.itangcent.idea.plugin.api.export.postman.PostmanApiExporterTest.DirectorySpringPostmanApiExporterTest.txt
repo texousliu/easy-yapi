@@ -63,7 +63,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "test RequestHeader-Example",
               "header": [
@@ -123,7 +122,7 @@
                 },
                 {
                   "key": "ints",
-                  "value": "0",
+                  "value": "",
                   "equals": true,
                   "description": "integer array"
                 }
@@ -159,7 +158,7 @@
                     },
                     {
                       "key": "ints",
-                      "value": "0",
+                      "value": "",
                       "equals": true,
                       "description": "integer array"
                     }
@@ -170,7 +169,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "test query with array parameters-Example",
               "header": [
@@ -251,7 +249,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "test ignored method-Example",
               "header": [
@@ -332,7 +329,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "test query with javax.servlet.http.HttpServletRequest-Example",
               "header": [
@@ -413,7 +409,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "test query with javax.servlet.http.HttpServletResponse-Example",
               "header": [
@@ -496,7 +491,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "test api return void-Example",
               "header": [
@@ -579,7 +573,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "test api return Void-Example",
               "header": [
@@ -664,7 +657,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "test api return Result\u003cVoid\u003e-Example",
               "header": [
@@ -697,6 +689,342 @@
             }
           ],
           "name": "test api return Result\u003cVoid\u003e"
+        },
+        {
+          "request": {
+            "method": "GET",
+            "description": "",
+            "header": [
+              {
+                "key": "token",
+                "value": "",
+                "type": "text",
+                "description": "auth token"
+              }
+            ],
+            "url": {
+              "path": [
+                "test",
+                "return",
+                "enum"
+              ],
+              "query": [],
+              "host": "{{test_default}}",
+              "raw": "{{test_default}}/test/return/enum"
+            }
+          },
+          "response": [
+            {
+              "originalRequest": {
+                "method": "GET",
+                "description": "",
+                "header": [
+                  {
+                    "key": "token",
+                    "value": "",
+                    "type": "text",
+                    "description": "auth token"
+                  }
+                ],
+                "url": {
+                  "path": [
+                    "test",
+                    "return",
+                    "enum"
+                  ],
+                  "query": [],
+                  "host": "{{test_default}}",
+                  "raw": "{{test_default}}/test/return/enum"
+                }
+              },
+              "_postman_previewlanguage": "json",
+              "code": 200,
+              "responseTime": 50,
+              "name": "test api return Enum-Example",
+              "header": [
+                {
+                  "name": "date",
+                  "key": "date",
+                  "value": "Sun, 11 Apr 202106:56:34 GMT",
+                  "description": "The date and time that the message was sent"
+                },
+                {
+                  "name": "server",
+                  "key": "server",
+                  "value": "Apache-Coyote/1.1",
+                  "description": "A name for the server"
+                },
+                {
+                  "name": "transfer-encoding",
+                  "key": "transfer-encoding",
+                  "value": "chunked",
+                  "description": "The form of encoding used to safely transfer the entity to the user. Currently defined methods are: chunked, compress, deflate, gzip, identity."
+                },
+                {
+                  "name": "content-type",
+                  "key": "content-type",
+                  "value": "application/json;charset\u003dUTF-8"
+                }
+              ],
+              "body": "\"\"",
+              "status": "OK"
+            }
+          ],
+          "name": "test api return Enum"
+        },
+        {
+          "request": {
+            "method": "GET",
+            "description": "",
+            "header": [
+              {
+                "key": "token",
+                "value": "",
+                "type": "text",
+                "description": "auth token"
+              }
+            ],
+            "url": {
+              "path": [
+                "test",
+                "return",
+                "result",
+                "enum"
+              ],
+              "query": [],
+              "host": "{{test_default}}",
+              "raw": "{{test_default}}/test/return/result/enum"
+            }
+          },
+          "response": [
+            {
+              "originalRequest": {
+                "method": "GET",
+                "description": "",
+                "header": [
+                  {
+                    "key": "token",
+                    "value": "",
+                    "type": "text",
+                    "description": "auth token"
+                  }
+                ],
+                "url": {
+                  "path": [
+                    "test",
+                    "return",
+                    "result",
+                    "enum"
+                  ],
+                  "query": [],
+                  "host": "{{test_default}}",
+                  "raw": "{{test_default}}/test/return/result/enum"
+                }
+              },
+              "_postman_previewlanguage": "json",
+              "code": 200,
+              "responseTime": 50,
+              "name": "test api return Result\u003cEnum\u003e-Example",
+              "header": [
+                {
+                  "name": "date",
+                  "key": "date",
+                  "value": "Sun, 11 Apr 202106:56:34 GMT",
+                  "description": "The date and time that the message was sent"
+                },
+                {
+                  "name": "server",
+                  "key": "server",
+                  "value": "Apache-Coyote/1.1",
+                  "description": "A name for the server"
+                },
+                {
+                  "name": "transfer-encoding",
+                  "key": "transfer-encoding",
+                  "value": "chunked",
+                  "description": "The form of encoding used to safely transfer the entity to the user. Currently defined methods are: chunked, compress, deflate, gzip, identity."
+                },
+                {
+                  "name": "content-type",
+                  "key": "content-type",
+                  "value": "application/json;charset\u003dUTF-8"
+                }
+              ],
+              "body": "{\n    \"code\": 0, //response code\n    \"msg\": \"\", //message\n    /**\n     * response data\n     * ADMIN :administration\n     * MEM :a person, an animal or a plant\n     * GUEST :Anonymous visitor\n     */\n    \"data\": \"\"\n}",
+              "status": "OK"
+            }
+          ],
+          "name": "test api return Result\u003cEnum\u003e"
+        },
+        {
+          "request": {
+            "method": "GET",
+            "description": "",
+            "header": [
+              {
+                "key": "token",
+                "value": "",
+                "type": "text",
+                "description": "auth token"
+              }
+            ],
+            "url": {
+              "path": [
+                "test",
+                "return",
+                "enum",
+                "field"
+              ],
+              "query": [],
+              "host": "{{test_default}}",
+              "raw": "{{test_default}}/test/return/enum/field"
+            }
+          },
+          "response": [
+            {
+              "originalRequest": {
+                "method": "GET",
+                "description": "",
+                "header": [
+                  {
+                    "key": "token",
+                    "value": "",
+                    "type": "text",
+                    "description": "auth token"
+                  }
+                ],
+                "url": {
+                  "path": [
+                    "test",
+                    "return",
+                    "enum",
+                    "field"
+                  ],
+                  "query": [],
+                  "host": "{{test_default}}",
+                  "raw": "{{test_default}}/test/return/enum/field"
+                }
+              },
+              "_postman_previewlanguage": "json",
+              "code": 200,
+              "responseTime": 50,
+              "name": "test api return Enum field-Example",
+              "header": [
+                {
+                  "name": "date",
+                  "key": "date",
+                  "value": "Sun, 11 Apr 202106:56:34 GMT",
+                  "description": "The date and time that the message was sent"
+                },
+                {
+                  "name": "server",
+                  "key": "server",
+                  "value": "Apache-Coyote/1.1",
+                  "description": "A name for the server"
+                },
+                {
+                  "name": "transfer-encoding",
+                  "key": "transfer-encoding",
+                  "value": "chunked",
+                  "description": "The form of encoding used to safely transfer the entity to the user. Currently defined methods are: chunked, compress, deflate, gzip, identity."
+                },
+                {
+                  "name": "content-type",
+                  "key": "content-type",
+                  "value": "application/json;charset\u003dUTF-8"
+                }
+              ],
+              "body": "0",
+              "status": "OK"
+            }
+          ],
+          "name": "test api return Enum field"
+        },
+        {
+          "request": {
+            "method": "GET",
+            "description": "",
+            "header": [
+              {
+                "key": "token",
+                "value": "",
+                "type": "text",
+                "description": "auth token"
+              }
+            ],
+            "url": {
+              "path": [
+                "test",
+                "return",
+                "result",
+                "enum",
+                "field"
+              ],
+              "query": [],
+              "host": "{{test_default}}",
+              "raw": "{{test_default}}/test/return/result/enum/field"
+            }
+          },
+          "response": [
+            {
+              "originalRequest": {
+                "method": "GET",
+                "description": "",
+                "header": [
+                  {
+                    "key": "token",
+                    "value": "",
+                    "type": "text",
+                    "description": "auth token"
+                  }
+                ],
+                "url": {
+                  "path": [
+                    "test",
+                    "return",
+                    "result",
+                    "enum",
+                    "field"
+                  ],
+                  "query": [],
+                  "host": "{{test_default}}",
+                  "raw": "{{test_default}}/test/return/result/enum/field"
+                }
+              },
+              "_postman_previewlanguage": "json",
+              "code": 200,
+              "responseTime": 50,
+              "name": "test api return Result\u003cEnum field\u003e-Example",
+              "header": [
+                {
+                  "name": "date",
+                  "key": "date",
+                  "value": "Sun, 11 Apr 202106:56:34 GMT",
+                  "description": "The date and time that the message was sent"
+                },
+                {
+                  "name": "server",
+                  "key": "server",
+                  "value": "Apache-Coyote/1.1",
+                  "description": "A name for the server"
+                },
+                {
+                  "name": "transfer-encoding",
+                  "key": "transfer-encoding",
+                  "value": "chunked",
+                  "description": "The form of encoding used to safely transfer the entity to the user. Currently defined methods are: chunked, compress, deflate, gzip, identity."
+                },
+                {
+                  "name": "content-type",
+                  "key": "content-type",
+                  "value": "application/json;charset\u003dUTF-8"
+                }
+              ],
+              "body": "{\n    \"code\": 0, //response code\n    \"msg\": \"\", //message\n    \"data\": 0 //response data\n}",
+              "status": "OK"
+            }
+          ],
+          "name": "test api return Result\u003cEnum field\u003e"
         },
         {
           "request": {
@@ -747,7 +1075,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "return nested node-Example",
               "header": [
@@ -830,7 +1157,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "return root with nested nodes-Example",
               "header": [
@@ -913,7 +1239,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "return customMap-Example",
               "header": [
@@ -998,7 +1323,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "user page query-Example",
               "header": [
@@ -1097,7 +1421,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "user page query with ModelAttribute-Example",
               "header": [
@@ -1196,7 +1519,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "user page query with POST-Example",
               "header": [
@@ -1253,13 +1575,13 @@
               "query": [
                 {
                   "key": "id",
-                  "value": "0",
+                  "value": "",
                   "equals": true,
                   "description": "user id"
                 },
                 {
                   "key": "type",
-                  "value": "0",
+                  "value": "",
                   "equals": true,
                   "description": "user type\n1 :administration\n2 :a person, an animal or a plant\n3 :Anonymous visitor"
                 },
@@ -1271,13 +1593,13 @@
                 },
                 {
                   "key": "age",
-                  "value": "0",
+                  "value": "",
                   "equals": true,
                   "description": "user age"
                 },
                 {
                   "key": "sex",
-                  "value": "0",
+                  "value": "",
                   "equals": true,
                   "description": ""
                 },
@@ -1322,13 +1644,13 @@
                   "query": [
                     {
                       "key": "id",
-                      "value": "0",
+                      "value": "",
                       "equals": true,
                       "description": "user id"
                     },
                     {
                       "key": "type",
-                      "value": "0",
+                      "value": "",
                       "equals": true,
                       "description": "user type\n1 :administration\n2 :a person, an animal or a plant\n3 :Anonymous visitor"
                     },
@@ -1340,13 +1662,13 @@
                     },
                     {
                       "key": "age",
-                      "value": "0",
+                      "value": "",
                       "equals": true,
                       "description": "user age"
                     },
                     {
                       "key": "sex",
-                      "value": "0",
+                      "value": "",
                       "equals": true,
                       "description": ""
                     },
@@ -1369,7 +1691,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "user page query with array-Example",
               "header": [
@@ -1452,7 +1773,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "current ctrl name-Example",
               "header": [
@@ -1525,7 +1845,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "say hello-Example",
               "header": [
@@ -1580,7 +1899,7 @@
               "query": [
                 {
                   "key": "id",
-                  "value": "0",
+                  "value": "",
                   "equals": true,
                   "description": "user id"
                 }
@@ -1611,7 +1930,7 @@
                   "query": [
                     {
                       "key": "id",
-                      "value": "0",
+                      "value": "",
                       "equals": true,
                       "description": "user id"
                     }
@@ -1622,7 +1941,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "get user info-Example",
               "header": [
@@ -1728,7 +2046,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "create an user-Example",
               "header": [
@@ -1901,7 +2218,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "update user info-Example",
               "header": [
@@ -1984,7 +2300,6 @@
               },
               "_postman_previewlanguage": "json",
               "code": 200,
-              "_postman_previewtype": "text",
               "responseTime": 50,
               "name": "current ctrl name-Example",
               "header": [

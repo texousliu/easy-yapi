@@ -7,6 +7,7 @@ import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.MutableCollectionComboBoxModel
 import com.intellij.ui.table.JBTable
 import com.itangcent.cache.withoutCache
+import com.itangcent.common.logger.Log
 import com.itangcent.common.utils.*
 import com.itangcent.idea.icons.EasyIcons
 import com.itangcent.idea.icons.iconOnly
@@ -14,10 +15,7 @@ import com.itangcent.idea.plugin.api.export.postman.PostmanCachedApiHelper
 import com.itangcent.idea.plugin.api.export.postman.PostmanUrls.INTEGRATIONS_DASHBOARD
 import com.itangcent.idea.plugin.api.export.postman.PostmanWorkspace
 import com.itangcent.idea.plugin.configurable.AbstractEasyApiSettingGUI
-import com.itangcent.idea.plugin.settings.MarkdownFormatType
-import com.itangcent.idea.plugin.settings.PostmanExportMode
-import com.itangcent.idea.plugin.settings.PostmanJson5FormatType
-import com.itangcent.idea.plugin.settings.Settings
+import com.itangcent.idea.plugin.settings.*
 import com.itangcent.idea.plugin.settings.helper.*
 import com.itangcent.idea.plugin.settings.xml.postmanCollectionsAsPairs
 import com.itangcent.idea.plugin.settings.xml.setPostmanCollectionsPairs
@@ -62,6 +60,8 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
     private var wrapCollectionCheckBox: JCheckBox? = null
 
     private var autoMergeScriptCheckBox: JCheckBox? = null
+
+    private var buildExampleCheckBox: JCheckBox? = null
 
     private var postmanExportModeComboBox: JComboBox<String>? = null
 
@@ -113,7 +113,9 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
 
     private var feignEnableCheckBox: JCheckBox? = null
 
-    private var quarkusEnableCheckBox: JCheckBox? = null
+    private var jaxrsEnableCheckBox: JCheckBox? = null
+
+    private var actuatorEnableCheckBox: JCheckBox? = null
 
     private var globalCacheSizeLabel: JLabel? = null
 
@@ -130,6 +132,8 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
     private var markdownFormatTypeComboBox: JComboBox<String>? = null
 
     private var inferEnableCheckBox: JCheckBox? = null
+
+    private var selectedOnlyCheckBox: JCheckBox? = null
 
     private var maxDeepTextField: JTextField? = null
 
@@ -148,6 +152,8 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
     private var switchNoticeCheckBox: JCheckBox? = null
 
     private var loginModeCheckBox: JCheckBox? = null
+
+    private var yapiExportModeComboBox: JComboBox<String>? = null
 
     private var yapiReqBodyJson5CheckBox: JCheckBox? = null
 
@@ -235,6 +241,9 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
             this.yapiTokenLabel!!.text = if (it) "projectIds:" else "tokens:"
         }
 
+        yapiExportModeComboBox!!.model =
+            DefaultComboBoxModel(YapiExportMode.values().mapToTypedArray { it.name })
+
         logLevelComboBox!!.model = DefaultComboBoxModel(CommonSettingsHelper.CoarseLogLevel.editableValues())
 
         logCharsetComboBox!!.model = DefaultComboBoxModel(Charsets.SUPPORTED_CHARSETS)
@@ -254,6 +263,7 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
         this.postmanTokenTextField!!.text = settings.postmanToken ?: ""
         this.wrapCollectionCheckBox!!.isSelected = settings.wrapCollection
         this.autoMergeScriptCheckBox!!.isSelected = settings.autoMergeScript
+        this.buildExampleCheckBox!!.isSelected = settings.postmanBuildExample
 
         this.postmanWorkspaceComboBoxModel?.selectedItem = this.selectedPostmanWorkspace
         this.logLevelComboBox!!.selectedItem = CommonSettingsHelper.CoarseLogLevel.toLevel(settings.logLevel)
@@ -266,8 +276,10 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
         this.methodDocEnableCheckBox!!.isSelected = settings.methodDocEnable
         this.genericEnableCheckBox!!.isSelected = settings.genericEnable
         this.feignEnableCheckBox!!.isSelected = settings.feignEnable
-        this.quarkusEnableCheckBox!!.isSelected = settings.quarkusEnable
+        this.jaxrsEnableCheckBox!!.isSelected = settings.jaxrsEnable
+        this.actuatorEnableCheckBox!!.isSelected = settings.actuatorEnable
         this.inferEnableCheckBox!!.isSelected = settings.inferEnable
+        this.selectedOnlyCheckBox!!.isSelected = settings.selectedOnly
         this.readGetterCheckBox!!.isSelected = settings.readGetter
         this.readSetterCheckBox!!.isSelected = settings.readSetter
         this.formExpandedCheckBox!!.isSelected = settings.formExpanded
@@ -281,6 +293,7 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
         this.enableUrlTemplatingCheckBox!!.isSelected = settings.enableUrlTemplating
         this.switchNoticeCheckBox!!.isSelected = settings.switchNotice
         this.loginModeCheckBox!!.isSelected = settings.loginMode
+        this.yapiExportModeComboBox!!.selectedItem = settings.yapiExportMode
         this.yapiReqBodyJson5CheckBox!!.isSelected = settings.yapiReqBodyJson5
         this.yapiResBodyJson5CheckBox!!.isSelected = settings.yapiResBodyJson5
 
@@ -568,6 +581,7 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
         settings.postmanToken = postmanTokenTextField!!.text
         settings.wrapCollection = wrapCollectionCheckBox!!.isSelected
         settings.autoMergeScript = autoMergeScriptCheckBox!!.isSelected
+        settings.postmanBuildExample = buildExampleCheckBox!!.isSelected
         postmanJson5FormatTypeComboBox!!.selected()?.let {
             settings.postmanJson5FormatType = it
         }
@@ -575,18 +589,21 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
         settings.methodDocEnable = methodDocEnableCheckBox!!.isSelected
         settings.genericEnable = genericEnableCheckBox!!.isSelected
         settings.feignEnable = feignEnableCheckBox!!.isSelected
-        settings.quarkusEnable = quarkusEnableCheckBox!!.isSelected
+        settings.jaxrsEnable = jaxrsEnableCheckBox!!.isSelected
+        settings.actuatorEnable = actuatorEnableCheckBox!!.isSelected
         settings.queryExpanded = queryExpandedCheckBox!!.isSelected
         settings.formExpanded = formExpandedCheckBox!!.isSelected
         settings.readGetter = readGetterCheckBox!!.isSelected
         settings.readSetter = readSetterCheckBox!!.isSelected
         settings.inferEnable = inferEnableCheckBox!!.isSelected
+        settings.selectedOnly = selectedOnlyCheckBox!!.isSelected
         settings.inferMaxDeep = maxDeepTextField!!.text.toIntOrNull() ?: Settings.DEFAULT_INFER_MAX_DEEP
         settings.yapiServer = yapiServerTextField!!.text
         settings.yapiTokens = yapiTokenTextArea!!.text
         settings.enableUrlTemplating = enableUrlTemplatingCheckBox!!.isSelected
         settings.switchNotice = switchNoticeCheckBox!!.isSelected
         settings.loginMode = loginModeCheckBox!!.isSelected
+        settings.yapiExportMode = yapiExportModeComboBox!!.selectedItem as? String ?: YapiExportMode.ALWAYS_UPDATE.name
         settings.yapiReqBodyJson5 = yapiReqBodyJson5CheckBox!!.isSelected
         settings.yapiResBodyJson5 = yapiResBodyJson5CheckBox!!.isSelected
         settings.httpTimeOut =
@@ -607,7 +624,7 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
         readPostmanCollections(settings)
     }
 
-    companion object {
+    companion object : Log() {
         const val basePath = ".easy_api"
 
         const val setting_path = "easy.api.setting.path"
@@ -619,5 +636,3 @@ class EasyApiSettingGUI : AbstractEasyApiSettingGUI() {
         private var DEFAULT_WORKSPACE = PostmanWorkspaceData(null, "")
     }
 }
-
-private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(YapiDashboardDialog::class.java)

@@ -32,9 +32,6 @@ open class SpringRequestClassExporter : RequestClassExporter() {
     protected lateinit var annotationHelper: AnnotationHelper
 
     @Inject
-    protected val commentResolver: CommentResolver? = null
-
-    @Inject
     protected lateinit var springRequestMappingResolver: SpringRequestMappingResolver
 
     override fun processClass(cls: PsiClass, classExportContext: ClassExportContext) {
@@ -65,7 +62,7 @@ open class SpringRequestClassExporter : RequestClassExporter() {
     override fun processMethodParameter(
         request: Request,
         parameterExportContext: ParameterExportContext,
-        paramDesc: String?
+        paramDesc: String?,
     ) {
 
         //RequestBody(json)
@@ -97,12 +94,7 @@ open class SpringRequestClassExporter : RequestClassExporter() {
             return
         }
 
-        var ultimateComment = (paramDesc ?: "")
-        parameterExportContext.type()?.let { duckType ->
-            commentResolver!!.resolveCommentForType(duckType, parameterExportContext.psi())?.let {
-                ultimateComment = "$ultimateComment $it"
-            }
-        }
+        val ultimateComment = getUltimateCommentOfParam(paramDesc, parameterExportContext)
 
         //head
         val requestHeaderAnn = findRequestHeader(parameterExportContext.psi())
@@ -272,7 +264,7 @@ open class SpringRequestClassExporter : RequestClassExporter() {
                 parameterExportContext,
                 request,
                 parameterExportContext.paramName(),
-                parameterExportContext.defaultVal().toString(),
+                parameterExportContext.defaultVal(),
                 parameterExportContext.required()
                     ?: false,
                 ultimateComment
@@ -287,6 +279,19 @@ open class SpringRequestClassExporter : RequestClassExporter() {
 
         //else
         addParamAsQuery(parameterExportContext, request, parameterExportContext.unbox(), ultimateComment)
+    }
+
+    protected fun getUltimateCommentOfParam(
+        paramDesc: String?,
+        parameterExportContext: ParameterExportContext
+    ): String {
+        var ultimateComment = (paramDesc ?: "")
+        parameterExportContext.type()?.let { duckType ->
+            commentResolver.resolveCommentForType(duckType, parameterExportContext.psi())?.let {
+                ultimateComment = "$ultimateComment $it"
+            }
+        }
+        return ultimateComment
     }
 
     override fun processMethod(methodExportContext: MethodExportContext, request: Request) {
@@ -304,8 +309,8 @@ open class SpringRequestClassExporter : RequestClassExporter() {
         ) {
             httpMethod = ctrlHttpMethod
         }
-        request.method = httpMethod
 
+        requestBuilderListener.setMethodIfMissed(methodExportContext, request, httpMethod)
         val httpPath = basePath.concat(findHttpPath(requestMapping))
         requestBuilderListener.setPath(methodExportContext, request, httpPath)
     }
@@ -322,7 +327,7 @@ open class SpringRequestClassExporter : RequestClassExporter() {
 
     //region process spring annotation-------------------------------------------------------------------
 
-    private fun findHttpPath(requestMappingAnn: Map<String, Any?>?): URL {
+    protected fun findHttpPath(requestMappingAnn: Map<String, Any?>?): URL {
         return when (val path = requestMappingAnn?.any("path", "value")) {
             null -> URL.nil()
             is Array<*> -> URL.of(path.mapNotNull { it?.toString() })
@@ -332,7 +337,7 @@ open class SpringRequestClassExporter : RequestClassExporter() {
 
     protected open fun resolveParamInRequestMapping(
         methodExportContext: MethodExportContext,
-        request: Request, requestMappingAnn: Map<String, Any?>
+        request: Request, requestMappingAnn: Map<String, Any?>,
     ) {
         val params = requestMappingAnn["params"] ?: return
         if (params is Array<*>) {
@@ -349,7 +354,7 @@ open class SpringRequestClassExporter : RequestClassExporter() {
 
     protected open fun resolveParamStr(
         methodExportContext: MethodExportContext,
-        request: Request, params: String
+        request: Request, params: String,
     ) {
         when {
             params.startsWith("!") -> {
@@ -402,7 +407,7 @@ open class SpringRequestClassExporter : RequestClassExporter() {
 
     protected open fun resolveHeaderInRequestMapping(
         methodExportContext: MethodExportContext,
-        request: Request, requestMappingAnn: Map<String, Any?>
+        request: Request, requestMappingAnn: Map<String, Any?>,
     ) {
         val headers = requestMappingAnn["headers"] ?: return
         if (headers is Array<*>) {
@@ -462,7 +467,7 @@ open class SpringRequestClassExporter : RequestClassExporter() {
         }
     }
 
-    private fun findHttpMethod(requestMappingAnn: Map<String, Any?>?): String {
+    protected fun findHttpMethod(requestMappingAnn: Map<String, Any?>?): String {
         if (requestMappingAnn == null) {
             return HttpMethod.NO_METHOD
         }
@@ -484,7 +489,7 @@ open class SpringRequestClassExporter : RequestClassExporter() {
         }
     }
 
-    private fun findRequestMappingInAnn(ele: PsiElement): Map<String, Any?>? {
+    protected fun findRequestMappingInAnn(ele: PsiElement): Map<String, Any?>? {
         return springRequestMappingResolver.resolveRequestMapping(ele)
     }
 

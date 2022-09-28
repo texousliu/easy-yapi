@@ -4,6 +4,7 @@ import com.google.inject.Inject
 import com.intellij.openapi.options.SearchableConfigurable
 import com.intellij.openapi.project.Project
 import com.itangcent.common.kit.toJson
+import com.itangcent.common.logger.Log
 import com.itangcent.idea.plugin.api.export.core.EasyApiConfigReader
 import com.itangcent.idea.plugin.settings.SettingBinder
 import com.itangcent.intellij.config.ConfigReader
@@ -87,12 +88,12 @@ abstract class AbstractEasyApiConfigurable(private var myProject: Project?) : Se
 
     override fun disposeUIResources() {
         super.disposeUIResources()
-        context?.stop(true)
+        context?.stop()
     }
+
+    companion object : Log()
 
     init {
         LOG.info("create instance of ${this::class.qualifiedName}")
     }
 }
-
-private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(EasyApiConfigurable::class.java)

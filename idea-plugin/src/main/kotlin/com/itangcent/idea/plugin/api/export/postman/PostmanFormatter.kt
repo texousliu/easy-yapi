@@ -23,6 +23,8 @@ import com.itangcent.idea.utils.ModuleHelper
 import com.itangcent.idea.utils.SystemProvider
 import com.itangcent.intellij.config.rule.RuleComputer
 import com.itangcent.intellij.context.ActionContext
+import com.itangcent.intellij.extend.takeIfNotOriginal
+import com.itangcent.intellij.extend.takeIfSpecial
 import com.itangcent.intellij.util.ActionUtils
 import org.apache.commons.lang3.RandomUtils
 import java.util.*
@@ -188,7 +190,7 @@ open class PostmanFormatter {
             queryList.add(
                 KV.create<String, Any?>()
                     .set(KEY, it.name)
-                    .set(VALUE, it.value)
+                    .set(VALUE, it.value?.takeIfNotOriginal()?.toString() ?: "")
                     .set("equals", true)
                     .set(DESCRIPTION, it.desc)
             )
@@ -204,7 +206,7 @@ open class PostmanFormatter {
                     formdatas.add(
                         KV.create<String, Any?>()
                             .set(KEY, it.name)
-                            .set(VALUE, it.value)
+                            .set(VALUE, it.value.takeIfSpecial())
                             .set(TYPE, it.type)
                             .set(DESCRIPTION, it.desc)
                     )
@@ -218,7 +220,7 @@ open class PostmanFormatter {
                     urlEncodeds.add(
                         KV.create<String, Any?>()
                             .set(KEY, it.name)
-                            .set(VALUE, it.value)
+                            .set(VALUE, it.value.takeIfSpecial())
                             .set(TYPE, it.type)
                             .set(DESCRIPTION, it.desc)
                     )
@@ -237,8 +239,7 @@ open class PostmanFormatter {
             requestInfo["body"] = body
         }
 
-
-        if (request.response.notNullOrEmpty()) {
+        if (postmanSettingsHelper.buildExample() && request.response.notNullOrEmpty()) {
 
             val responses: ArrayList<HashMap<String, Any?>> = ArrayList()
             val exampleName = request.name + "-Example"
@@ -261,7 +262,7 @@ open class PostmanFormatter {
                 responseInfo["status"] = "OK"
                 responseInfo["code"] = 200
                 responseInfo["_postman_previewlanguage"] = "json"
-                responseInfo["_postman_previewtype"] = "text"
+//                responseInfo["_postman_previewtype"] = "text"
                 val responseHeader = ArrayList<Map<String, Any?>>()
                 responseInfo["header"] = responseHeader
 
@@ -318,7 +319,7 @@ open class PostmanFormatter {
                         KV.create<String, Any?>()
                             .set(NAME, it.name)
                             .set(KEY, it.name)
-                            .set(VALUE, it.value)
+                            .set(VALUE, it.value.takeIfSpecial())
                             .set(DESCRIPTION, it.desc)
                     )
                 }
@@ -544,7 +545,7 @@ open class PostmanFormatter {
         }
     }
 
-    fun parseRequests(requests: MutableList<Request>): HashMap<String, Any?> {
+    fun parseRequests(requests: List<Request>): HashMap<String, Any?> {
         val postmanCollection = doParseRequests(requests)
         if (postmanSettingsHelper.autoMergeScript()) {
             autoMerge(postmanCollection)
@@ -618,7 +619,7 @@ open class PostmanFormatter {
         return events
     }
 
-    private fun doParseRequests(requests: MutableList<Request>): HashMap<String, Any?> {
+    private fun doParseRequests(requests: List<Request>): HashMap<String, Any?> {
 
 
         //parse [request...] ->
@@ -686,7 +687,7 @@ open class PostmanFormatter {
         return wrapRootInfo(rootModule, modules)
     }
 
-    private fun parseRequestsToFolder(requests: MutableList<Request>): HashMap<Folder, ArrayList<HashMap<String, Any?>>> {
+    private fun parseRequestsToFolder(requests: List<Request>): HashMap<Folder, ArrayList<HashMap<String, Any?>>> {
         //parse [request...] ->
         //                      {
         //                          "folder":[request...]
@@ -703,7 +704,7 @@ open class PostmanFormatter {
         return folderGroupedMap
     }
 
-    fun parseRequestsToCollection(collectionInfo: HashMap<String, Any?>, requests: MutableList<Request>) {
+    fun parseRequestsToCollection(collectionInfo: HashMap<String, Any?>, requests: List<Request>) {
         val folderGroupedMap = parseRequestsToFolder(requests)
         val folders = collectionInfo.getEditableItem()
         folderGroupedMap.entries.forEach { (folder, items) ->
